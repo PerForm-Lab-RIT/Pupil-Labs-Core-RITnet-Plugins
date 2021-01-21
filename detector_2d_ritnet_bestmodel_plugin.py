@@ -83,24 +83,24 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
         self.g_pool.ritnet_selection = ritnet_unique_id
         if ritnet_unique_id == 'ritnet_ellseg':
             print("---------------------ELLSEG SELECTED---------------------")
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.09
-            self.order = 0.08
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.08
+            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.08
+            self.order = 0.09
+            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.09
         elif ritnet_unique_id == 'ritnet_bestmodel':
             print("---------------------BESTMODEL SELECTED---------------------")
-            self.order = 0.09
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.08
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.08
+            self.order = 0.08
+            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.09
+            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.09
         elif ritnet_unique_id == 'ritnet_pupil':
             print("---------------------PUPIL SELECTED---------------------")
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.09
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.08
-            self.order = 0.08
+            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.08
+            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.09
+            self.order = 0.09
         else:
             print("---------------------NONE SELECTED---------------------")
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.08
-            self.order = 0.08
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.08
+            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.11
+            self.order = 0.11
+            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.11
         
     def __init__(
         self,
