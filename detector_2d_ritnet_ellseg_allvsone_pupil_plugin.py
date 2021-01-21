@@ -1,3 +1,6 @@
+"""
+@author: Kevin Barkevich
+"""
 import sys
 import os
 
