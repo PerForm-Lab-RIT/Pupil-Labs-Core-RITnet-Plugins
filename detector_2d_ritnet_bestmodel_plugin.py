@@ -18,18 +18,13 @@ from pyglui import ui
 
 from ritnet.image import get_mask_from_PIL_image, init_model, get_pupil_ellipse_from_PIL_image
 from ritnet.models import model_dict, model_channel_dict
-from ritnet.Ellseg.args import parse_precision
-from ritnet.Ellseg.pytorchtools import load_from_file
 
 from ritnet_plugin_settings import ritnet_labels, ritnet_ids, default_id
 
 ritnet_directory = os.path.join(os.path.dirname(__file__), 'ritnet\\')
 filename = "best_model.pkl" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
 MODEL_DICT_STR, CHANNELS, IS_ELLSEG, ELLSEG_MODEL = model_channel_dict[filename]
-ELLSEG_FOLDER = 'Ellseg'
-ELLSEG_FILEPATH = ritnet_directory+ELLSEG_FOLDER
-ELLSEG_PRECISION = 32  # precision. 16, 32, 64
-ELLSEG_PRECISION = parse_precision(ELLSEG_PRECISION)
+ELLSEG_PRECISION = 0
 USEGPU = True
 KEEP_BIGGEST_PUPIL_BLOB_ONLY = True
 
@@ -69,6 +64,7 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
 
     label = "RITnet ritnet_bestmodel 2d detector"
     identifier = "ritnet-bestmodel-2d"
+    method = "2d c++"
     order = 0.08
     
     @property
@@ -80,27 +76,7 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
         return self.detector_2d
         
     def update_chosen_detector(self, ritnet_unique_id):
-        self.g_pool.ritnet_selection = ritnet_unique_id
-        if ritnet_unique_id == 'ritnet_ellseg':
-            print("---------------------ELLSEG SELECTED---------------------")
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.08
-            self.order = 0.09
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.09
-        elif ritnet_unique_id == 'ritnet_bestmodel':
-            print("---------------------BESTMODEL SELECTED---------------------")
-            self.order = 0.08
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.09
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.09
-        elif ritnet_unique_id == 'ritnet_pupil':
-            print("---------------------PUPIL SELECTED---------------------")
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.08
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.09
-            self.order = 0.09
-        else:
-            print("---------------------NONE SELECTED---------------------")
-            self.g_pool.plugin_by_name['Detector2DRITnetEllsegAllvonePlugin'] = 0.11
-            self.order = 0.11
-            self.g_pool.plugin_by_name['Detector2DRITnetPupilPlugin'].order = 0.11
+        self.order = 0.08
         
     def __init__(
         self,
@@ -116,47 +92,33 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
             useMultiGPU = True
         else:
             useMultiGPU = False
+            
         model = model_dict[MODEL_DICT_STR]
-    
-        if not IS_ELLSEG:
-            model  = model.to(device)
-            model.load_state_dict(torch.load(ritnet_directory+filename))
-            model = model.to(device)
-            model.eval()
-        else:
-            LOGDIR = os.path.join(ELLSEG_FILEPATH, 'ExpData', 'logs',\
-                              'ritnet_v2', ELLSEG_MODEL)
-            path2checkpoint = os.path.join(LOGDIR, 'checkpoints')
-            checkpointfile = os.path.join(path2checkpoint, 'checkpoint.pt')
-            print(checkpointfile)
-            netDict = load_from_file([checkpointfile, ''])
-            #print(checkpointfile)
-            #print(netDict)
-            model.load_state_dict(netDict['state_dict'])
-            #print('Parameters: {}'.format(get_nparams(model)))
-            model = model if not useMultiGPU else torch.nn.DataParallel(model)
-            model = model.to(device)
-            model = model.to(ELLSEG_PRECISION)
-            model.eval()
+        model  = model.to(device)
+        model.load_state_dict(torch.load(ritnet_directory+filename))
+        model = model.to(device)
+        model.eval()
         
-        #  Initialize model
-        
+        self.isAlone = False
         self.model = model
         self.detector_2d = RITPupilDetector(model, 4)
-        self.g_pool.ritnet_bestmodel_enable = True
     
     def _stop_other_pupil_detectors(self):
         plugin_list = self.g_pool.plugins
 
         # Deactivate other PupilDetectorPlugin instances
         for plugin in plugin_list:
-            if isinstance(plugin, PupilDetectorPlugin) and plugin is not self and not isinstance(plugin, Pye3DPlugin):
+            if plugin.alive is True and isinstance(plugin, PupilDetectorPlugin) and plugin is not self and not isinstance(plugin, Pye3DPlugin):
+                logger.log(level=logging.DEBUG, msg="STOPPING A PLUGIN")
                 plugin.alive = False
 
         # Force Plugin_List to remove deactivated plugins
         plugin_list.clean()
     
     def detect(self, frame, **kwargs):
+        if not self.isAlone:
+            self._stop_other_pupil_detectors()
+            self.isAlone = True
         result = {}
         ellipse = {}
         eye_id = self.g_pool.eye_id
@@ -170,9 +132,7 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
         result["location"] = ellipse["center"]
         result["confidence"] = 0.0
         result["timestamp"] = frame.timestamp
-        
-        if not self.g_pool.ritnet_bestmodel_enable:
-            return result
+        result["method"] = self.method
             
         img = frame.gray
         
@@ -220,26 +180,9 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
         self.menu.label = self.pretty_class_name
         self.menu_icon.label_font = "pupil_icons"
         info = ui.Info_Text(
-            "(ORANGE) Model using RITnet, the \"ritnet_bestmodel\" model."
+            "(Orange) Model using RITnet, the \"ritnet_bestmodel\" model."
         )
         self.menu.append(info)
-        self.menu.append(
-            ui.Selector(
-                "ritnet_selection",
-                self.g_pool,
-                label="RITnet Selection",
-                selection=ritnet_ids,
-                labels=ritnet_labels,
-                setter=self.update_chosen_detector,
-            )
-        )
-        self.menu.append(
-            ui.Switch(
-                "ritnet_bestmodel_enable",
-                self.g_pool,
-                label="Enable RITnet bestmodel"
-            )
-        )
         """
         self.menu.append(
             ui.Slider(
