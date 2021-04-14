@@ -23,6 +23,8 @@ from ritnet.Ellseg.pytorchtools import load_from_file
 
 from ritnet_plugin_settings import ritnet_labels, ritnet_ids, default_id
 
+from cv2 import imshow
+
 ritnet_directory = os.path.join(os.path.dirname(__file__), 'ritnet\\')
 filename = "ellseg_allvsone" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
 MODEL_DICT_STR, CHANNELS, IS_ELLSEG, ELLSEG_MODEL = model_channel_dict[filename]
@@ -54,14 +56,14 @@ class RITPupilDetector(DetectorBase):
     #        self.ind = 0
     #    return coords
 
-    def detect(self, img):
+    def detect(self, img, debugOutputWindowName):
         # here we override the detect method with our own custom detector
         # this is a random artificial pupil center
         # center = (90, 90)
         # we move the center around the circle here
         # center = tuple(sum(x) for x in zip(center, self.get_circle_coord()))
         # return center
-        return get_pupil_ellipse_from_PIL_image(img, self._model, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION, ellsegEllipse=False)
+        return get_pupil_ellipse_from_PIL_image(img, self._model, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION, ellsegEllipse=False, debugWindowName=debugOutputWindowName)
 
 class Detector2DRITnetEllsegAllvonePlugin(PupilDetectorPlugin):
     uniqueness = "by_class"
@@ -122,6 +124,7 @@ class Detector2DRITnetEllsegAllvonePlugin(PupilDetectorPlugin):
         
         #  Initialize model
         
+        self.g_pool.ellseg_debug = False
         self.isAlone = False
         self.model = model
         self.detector_2d = RITPupilDetector(model, 4)
@@ -156,14 +159,18 @@ class Detector2DRITnetEllsegAllvonePlugin(PupilDetectorPlugin):
         result["timestamp"] = frame.timestamp
         result["method"] = self.method
             
+        debugOutputWindowName = None
         img = frame.gray
-        
+        if self.g_pool.ellseg_debug:
+            imshow('EYE'+str(eye_id)+' INPUT', img)
+            debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
+            
         # pred_img, predict = get_mask_from_PIL_image(frame, self.model, USEGPU, False, True, CHANNELS, KEEP_BIGGEST_PUPIL_BLOB_ONLY, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION)
         # ellipsedata = get_pupil_ellipse_from_PIL_image(img, self.model)
         # img = np.uint8(get_mask_from_PIL_image(img, self.model) * 255)
         
-        ellipsedata = self.detector_2d.detect(img)
-
+        ellipsedata = self.detector_2d.detect(img, debugOutputWindowName)
+        
         if ellipsedata is not None:
             eye_id = self.g_pool.eye_id
             result["id"] = eye_id
@@ -176,8 +183,6 @@ class Detector2DRITnetEllsegAllvonePlugin(PupilDetectorPlugin):
             result["location"] = ellipse["center"]
             result["confidence"] = 0.99
             result["timestamp"] = frame.timestamp
-        else:
-            return result
 
         #eye_id = self.g_pool.eye_id
         location = result["location"]
@@ -207,6 +212,13 @@ class Detector2DRITnetEllsegAllvonePlugin(PupilDetectorPlugin):
             "(PURPLE) Model using EllSeg, the \"allvsone\" model."
         )
         self.menu.append(info)
+        self.menu.append(
+            ui.Switch(
+                "ellseg_debug",
+                self.g_pool,
+                label="Enable Debug Mode"
+            )
+        )
         """
         self.menu.append(
             ui.Slider(
