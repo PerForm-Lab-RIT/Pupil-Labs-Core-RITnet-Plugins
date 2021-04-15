@@ -9,6 +9,7 @@ from visualizer_2d import draw_pupil_outline
 from pupil_detectors import DetectorBase
 from pupil_detector_plugins.detector_base_plugin import PupilDetectorPlugin
 from pupil_detector_plugins.pye3d_plugin import Pye3DPlugin
+from pupil_detector_plugins.detector_2d_plugin import Detector2DPlugin
 
 import logging
 from methods import normalize
@@ -30,6 +31,8 @@ ELLSEG_PRECISION = 0
 USEGPU = True
 KEEP_BIGGEST_PUPIL_BLOB_ONLY = True
 
+CHANNELS = 4
+
 if USEGPU:
     device=torch.device("cuda")
 else:
@@ -42,25 +45,12 @@ class RITPupilDetector(DetectorBase):
         self._model = model
         self._model_channels = model_channels
 
-    #def get_circle_coord(self):
-    #    # retreive a new point from the circle on every frame refresh
-    #    coords = self.pnts[self.ind]
-    #    if self.ind < self.stop_ind:
-    #        self.ind += 1
-    #    else:
-    #        self.ind = 0
-    #    return coords
+    def detect(self, img, custom_ellipse, debugOutputWindowName=None):
+        if custom_ellipse:
+            return get_pupil_ellipse_from_PIL_image(img, self._model, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION, debugWindowName=debugOutputWindowName)
+        return np.array(get_mask_from_PIL_image(img, self._model, channels=CHANNELS, trim_pupil=False, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION, useEllsegEllipseAsMask=False)*255).astype(np.ubyte)
 
-    def detect(self, img, debugOutputWindowName=None):
-        # here we override the detect method with our own custom detector
-        # this is a random artificial pupil center
-        # center = (90, 90)
-        # we move the center around the circle here
-        # center = tuple(sum(x) for x in zip(center, self.get_circle_coord()))
-        # return center
-        return get_pupil_ellipse_from_PIL_image(img, self._model, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION, debugWindowName=debugOutputWindowName)
-
-class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
+class Detector2DRITnetBestmodelPlugin(Detector2DPlugin):
     uniqueness = "by_class"
     icon_chr = "RB"
 
@@ -75,7 +65,7 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
         
     @property
     def pupil_detector(self) -> RITPupilDetector:
-        return self.detector_2d
+        return self.detector_ritnet_2d
         
     def update_chosen_detector(self, ritnet_unique_id):
         self.order = 0.08
@@ -101,10 +91,11 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
         model = model.to(device)
         model.eval()
         
+        self.g_pool.bestmodel_customellipse = False
         self.g_pool.bestmodel_debug = False
         self.isAlone = False
         self.model = model
-        self.detector_2d = RITPupilDetector(model, 4)
+        self.detector_ritnet_2d = RITPupilDetector(model, 4)
     
     def _stop_other_pupil_detectors(self):
         plugin_list = self.g_pool.plugins
@@ -136,19 +127,28 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
         result["confidence"] = 0.0
         result["timestamp"] = frame.timestamp
         result["method"] = self.method
-
-        debugOutputWindowName = None
+        
         img = frame.gray
+        debugOutputWindowName = None
         if self.g_pool.bestmodel_debug:
             imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
+            
+        customEllipse = self.g_pool.bestmodel_customellipse
+        if not customEllipse:  # If custom ellipse setting is NOT toggled on
+            mask = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)
+            framedup = lambda: None
+            setattr(framedup, 'gray', mask)
+            setattr(framedup, 'bgr', frame.bgr)
+            setattr(framedup, 'width', frame.width)
+            setattr(framedup, 'height', frame.height)
+            setattr(framedup, 'timestamp', frame.timestamp)
+            if self.g_pool.bestmodel_debug:
+                imshow(debugOutputWindowName, mask)
+            return super().detect(framedup)
         
-        # pred_img, predict = get_mask_from_PIL_image(frame, self.model, USEGPU, False, True, CHANNELS, KEEP_BIGGEST_PUPIL_BLOB_ONLY, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION)
-        # ellipsedata = get_pupil_ellipse_from_PIL_image(img, self.model)
-        # img = np.uint8(get_mask_from_PIL_image(img, self.model) * 255)
-        
-        ellipsedata = self.detector_2d.detect(img, debugOutputWindowName)
-        
+        # If custom ellipse setting is toggled on
+        ellipsedata = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)
         if ellipsedata is not None:
             eye_id = self.g_pool.eye_id
             result["id"] = eye_id
@@ -164,6 +164,7 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
 
         #eye_id = self.g_pool.eye_id
         location = result["location"]
+
         norm_pos = normalize(
             location, (frame.width, frame.height), flip_y=True
         )
@@ -181,13 +182,20 @@ class Detector2DRITnetBestmodelPlugin(PupilDetectorPlugin):
             draw_pupil_outline(self._recent_detection_result, color_rgb=(1, 0.5, 0))
     
     def init_ui(self):
-        super().init_ui()
+        super(Detector2DPlugin, self).init_ui()
         self.menu.label = self.pretty_class_name
         self.menu_icon.label_font = "pupil_icons"
         info = ui.Info_Text(
             "(Orange) Model using RITnet, the \"ritnet_bestmodel\" model."
         )
         self.menu.append(info)
+        self.menu.append(
+            ui.Switch(
+                "bestmodel_customellipse",
+                self.g_pool,
+                label="Use Custom Ellipse Finding Algorithm"
+            )
+        )
         self.menu.append(
             ui.Switch(
                 "bestmodel_debug",
