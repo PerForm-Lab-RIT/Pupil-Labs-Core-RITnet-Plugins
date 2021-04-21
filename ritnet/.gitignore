@@ -1,0 +1,15 @@
+/__pycache__/
+/logs/
+/0try/
+/_pycache_/
+/Semantic_Segmentation_Dataset/
+/test/
+/video/
+*.zip
+*.mp4
+pp_data.txt
+/Ellseg/__pycache__/
+/Ellseg/_pycache_/
+/Ellseg/models/__pycache__/
+/Ellseg/models/_pycache_/
+/Ellseg/ExpData/logs/

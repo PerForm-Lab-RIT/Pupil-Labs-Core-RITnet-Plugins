@@ -1,0 +1,10 @@
+install cuda
+
+opencv
+scikit-learn
+tqdm
+scikit-image
+
+
+python evaluate_ellseg.py --path2data=./ --ellseg_ellipses=1 --skip_ransac=0
+python evaluate_ellseg.py --path2data=./ --ellseg_ellipses=0 --skip_ransac=0

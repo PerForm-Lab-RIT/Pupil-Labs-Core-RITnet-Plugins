@@ -5,6 +5,8 @@ import sys
 import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..','..','pupil_src','shared_modules','pupil_detector_plugins'))
+#sys.path.append(os.path.join(os.path.dirname(__file__), 'ritnet'))
+#sys.path.append(os.path.join(os.path.dirname(__file__), 'ritnet', 'Ellseg'))
 from visualizer_2d import draw_pupil_outline
 from pupil_detectors import DetectorBase
 from pupil_detector_plugins.detector_base_plugin import PupilDetectorPlugin
@@ -19,8 +21,6 @@ from pyglui import ui
 
 from ritnet.image import get_mask_from_PIL_image, init_model, get_pupil_ellipse_from_PIL_image
 from ritnet.models import model_dict, model_channel_dict
-
-from ritnet_plugin_settings import ritnet_labels, ritnet_ids, default_id
 
 from cv2 import imshow
 

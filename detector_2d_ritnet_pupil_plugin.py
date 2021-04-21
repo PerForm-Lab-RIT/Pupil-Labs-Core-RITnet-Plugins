@@ -22,8 +22,6 @@ from ritnet.models import model_dict, model_channel_dict
 from ritnet.Ellseg.args import parse_precision
 from ritnet.Ellseg.pytorchtools import load_from_file
 
-from ritnet_plugin_settings import ritnet_labels, ritnet_ids, default_id
-
 from cv2 import imshow
 
 ritnet_directory = os.path.join(os.path.dirname(__file__), 'ritnet\\')
