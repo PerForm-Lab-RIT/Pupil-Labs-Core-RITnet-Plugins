@@ -94,6 +94,7 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
         model.eval()
         
         self.g_pool.ritnetpupil_customellipse = False
+        self.g_pool.ritnetpupil_reverse = False
         self.g_pool.ritnetpupil_debug = False
         self.isAlone = False
         self.model = model
@@ -131,6 +132,8 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
             
         img = frame.gray
         debugOutputWindowName = None
+        if self.g_pool.ritnetpupil_reverse:
+            img = np.flip(np.flip(img, axis=1), axis=0)
         if self.g_pool.ritnetpupil_debug:
             imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
@@ -190,6 +193,13 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
             "(GREEN) Model using RITnet, the \"ritnet_pupil\" model."
         )
         self.menu.append(info)
+        self.menu.append(
+            ui.Switch(
+                "ritnetpupil_reverse",
+                self.g_pool,
+                label="Flip image horizontally and vertically before processing"
+            )
+        )
         self.menu.append(
             ui.Switch(
                 "ritnetpupil_customellipse",

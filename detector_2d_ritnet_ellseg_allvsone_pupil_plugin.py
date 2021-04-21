@@ -115,6 +115,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         #  Initialize model
         
         self.g_pool.ellseg_customellipse = False
+        self.g_pool.ellseg_reverse = False
         self.g_pool.ellseg_debug = False
         self.isAlone = False
         self.model = model
@@ -152,6 +153,8 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             
         img = frame.gray
         debugOutputWindowName = None
+        if self.g_pool.ellseg_reverse:
+            img = np.flip(np.flip(img, axis=1), axis=0)
         if self.g_pool.ellseg_debug:
             imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
@@ -212,6 +215,13 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             "(PURPLE) Model using EllSeg, the \"allvsone\" model."
         )
         self.menu.append(info)
+        self.menu.append(
+            ui.Switch(
+                "ellseg_reverse",
+                self.g_pool,
+                label="Flip image horizontally and vertically before processing"
+            )
+        )
         self.menu.append(
             ui.Switch(
                 "ellseg_customellipse",
