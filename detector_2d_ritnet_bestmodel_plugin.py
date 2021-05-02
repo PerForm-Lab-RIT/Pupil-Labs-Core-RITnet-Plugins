@@ -4,6 +4,9 @@
 import sys
 import os
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..','..','pupil_src','shared_modules','pupil_detector_plugins'))
 #sys.path.append(os.path.join(os.path.dirname(__file__), 'ritnet'))
 #sys.path.append(os.path.join(os.path.dirname(__file__), 'ritnet', 'Ellseg'))
@@ -58,7 +61,7 @@ class Detector2DRITnetBestmodelPlugin(Detector2DPlugin):
     identifier = "ritnet-bestmodel-2d"
     method = "2d c++"
     order = 0.08
-    
+
     @property
     def pretty_class_name(self):
         return "RITnet Detector (ritnet_bestmodel)"
@@ -152,6 +155,7 @@ class Detector2DRITnetBestmodelPlugin(Detector2DPlugin):
         
         # If custom ellipse setting is toggled on
         ellipsedata = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)
+        
         if ellipsedata is not None:
             eye_id = self.g_pool.eye_id
             result["id"] = eye_id

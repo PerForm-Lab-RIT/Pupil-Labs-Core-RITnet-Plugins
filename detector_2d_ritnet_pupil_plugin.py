@@ -4,6 +4,9 @@
 import sys
 import os
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..','..','pupil_src','shared_modules','pupil_detector_plugins'))
 from visualizer_2d import draw_pupil_outline
 from pupil_detectors import DetectorBase
