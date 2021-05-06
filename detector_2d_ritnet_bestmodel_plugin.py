@@ -26,6 +26,7 @@ from ritnet.image import get_mask_from_PIL_image, init_model, get_pupil_ellipse_
 from ritnet.models import model_dict, model_channel_dict
 
 from cv2 import imshow
+import cv2
 
 ritnet_directory = os.path.join(os.path.dirname(__file__), 'ritnet\\')
 filename = "best_model.pkl" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
@@ -135,28 +136,45 @@ class Detector2DRITnetBestmodelPlugin(Detector2DPlugin):
         img = frame.gray
         debugOutputWindowName = None
         if self.g_pool.bestmodel_reverse:
-            img = np.flip(np.flip(img, axis=1), axis=0)
+            img = np.flip(img, axis=0)
         if self.g_pool.bestmodel_debug:
             imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
-            
+        
+        
         customEllipse = self.g_pool.bestmodel_customellipse
         if not customEllipse:  # If custom ellipse setting is NOT toggled on
             mask = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)
+            if self.g_pool.bestmodel_reverse:
+                mask = np.flip(mask, axis=0)
+                mask = mask.copy(order='C')
             framedup = lambda: None
             setattr(framedup, 'gray', mask)
             setattr(framedup, 'bgr', frame.bgr)
             setattr(framedup, 'width', frame.width)
             setattr(framedup, 'height', frame.height)
             setattr(framedup, 'timestamp', frame.timestamp)
+            final_result = super().detect(framedup)
             if self.g_pool.bestmodel_debug:
-                imshow(debugOutputWindowName, mask)
-            return super().detect(framedup)
+                final_result_ellipse = final_result["ellipse"]
+                elcenter = final_result_ellipse["center"]
+                elaxes = final_result_ellipse["axes"]
+                seg_map_debug = np.stack((np.copy(mask),)*3, axis=-1)
+                cv2.ellipse(seg_map_debug,
+                    (round(elcenter[0]), round(elcenter[1])),
+                    (round(elaxes[0]/2), round(elaxes[1]/2)),
+                    final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
+                cv2.imshow(debugOutputWindowName, seg_map_debug)
+            return final_result
         
         # If custom ellipse setting is toggled on
         ellipsedata = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)
         
         if ellipsedata is not None:
+            if self.g_pool.bestmodel_reverse:
+                height, width = img.shape
+                ellipsedata[1] = (-ellipsedata[1]+(2*height/2))
+                ellipsedata[4] = ellipsedata[4]*-1
             eye_id = self.g_pool.eye_id
             result["id"] = eye_id
             result["topic"] = f"pupil.{eye_id}.{self.identifier}"

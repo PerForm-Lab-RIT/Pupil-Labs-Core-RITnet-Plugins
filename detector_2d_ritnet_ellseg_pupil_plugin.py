@@ -260,7 +260,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         img = frame.gray
         debugOutputWindowName = None
         if self.g_pool.ellseg_reverse:
-            img = np.flip(np.flip(img, axis=1), axis=0)
+            img = np.flip(img, axis=0)
         if self.g_pool.ellseg_debug:
             cv2.imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
@@ -276,6 +276,12 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         pupil_ellipse = values[1]
         iris_ellipse = values[2]
         
+        if self.g_pool.ellseg_reverse:
+            seg_map = np.flip(seg_map, axis=0)
+            height, width = seg_map.shape
+            pupil_ellipse[1] = (-pupil_ellipse[1]+(2*height/2))
+            pupil_ellipse[4] = pupil_ellipse[4]*-1
+        
         # OPTION 1: If custom ellipse setting is NOT toggled on
         if not customEllipse:
             # background, iris, pupil
@@ -289,9 +295,18 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             setattr(framedup, 'width', frame.width)
             setattr(framedup, 'height', frame.height)
             setattr(framedup, 'timestamp', frame.timestamp)
+            final_result = super().detect(framedup)
             if self.g_pool.ellseg_debug:
-                cv2.imshow(debugOutputWindowName, seg_map)
-            return super().detect(framedup)
+                final_result_ellipse = final_result["ellipse"]
+                elcenter = final_result_ellipse["center"]
+                elaxes = final_result_ellipse["axes"]
+                seg_map_debug = np.stack((np.copy(seg_map),)*3, axis=-1)
+                cv2.ellipse(seg_map_debug,
+                    (round(elcenter[0]), round(elcenter[1])),
+                    (round(elaxes[0]/2), round(elaxes[1]/2)),
+                    final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
+                cv2.imshow(debugOutputWindowName, seg_map_debug)
+            return final_result
         
         # OPTION 2: If custom ellipse setting is toggled on
         #########################################
@@ -302,7 +317,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         seg_map[np.where(seg_map == 1)] = 0
         seg_map[np.where(seg_map == 2)] = 255
         seg_map = np.array(seg_map, dtype=np.uint8)
-        
+            
         openCVformatPupil = np.copy(pupil_ellipse)
 
         if (pupil_ellipse[4]) > np.pi / 2.0:
@@ -314,10 +329,18 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         pupil_ellipse[4] = np.rad2deg(pupil_ellipse[4])
 
         #########################################
+        
+        if self.g_pool.ellseg_debug:
+            seg_map_debug = np.stack((np.copy(seg_map),)*3, axis=-1)
+            cv2.ellipse(seg_map_debug,
+                (round(pupil_ellipse[0]), round(pupil_ellipse[1])),
+                (round(pupil_ellipse[2]), round(pupil_ellipse[3])),
+                pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
+            cv2.imshow(debugOutputWindowName, seg_map_debug)
+            
         confidence = self.calcConfidence(pupil_ellipse, seg_map)
 
         if self.g_pool.save_ellseg_masks == True:
-
             fname = "eye-{}_{:0.3f}.png".format(eye_id, confidence)
             self.saveMaskAsImage(img,seg_map,openCVformatPupil,fname,eye_id)
 
@@ -366,7 +389,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             ui.Switch(
                 "ellseg_reverse",
                 self.g_pool,
-                label="Flip image horizontally and vertically before processing"
+                label="Flip image vertically before processing"
             )
         )
         self.menu.append(
