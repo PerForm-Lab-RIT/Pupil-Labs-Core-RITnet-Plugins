@@ -96,7 +96,7 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
         model.eval()
         
         self.g_pool.ritnetpupil_customellipse = False
-        self.g_pool.ritnetpupil_reverse = False
+        self.g_pool.ritnetpupil_reverse = True if self.g_pool.eye_id==0 else False
         self.g_pool.ritnetpupil_debug = False
         self.isAlone = False
         self.model = model

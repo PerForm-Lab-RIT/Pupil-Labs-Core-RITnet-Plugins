@@ -96,7 +96,7 @@ class Detector2DRITnetBestmodelPlugin(Detector2DPlugin):
         model.eval()
         
         self.g_pool.bestmodel_customellipse = False
-        self.g_pool.bestmodel_reverse = False
+        self.g_pool.bestmodel_reverse = True if self.g_pool.eye_id==0 else False
         self.g_pool.bestmodel_debug = False
         self.isAlone = False
         self.model = model
