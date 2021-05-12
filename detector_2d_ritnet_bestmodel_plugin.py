@@ -140,7 +140,8 @@ class Detector2DRITnetBestmodelPlugin(Detector2DPlugin):
         if self.g_pool.bestmodel_debug:
             imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
-        
+        else:
+            cv2.destroyAllWindows()
         
         customEllipse = self.g_pool.bestmodel_customellipse
         if not customEllipse:  # If custom ellipse setting is NOT toggled on

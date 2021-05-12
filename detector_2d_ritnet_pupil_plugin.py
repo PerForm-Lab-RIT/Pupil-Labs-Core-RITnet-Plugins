@@ -139,7 +139,9 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
         if self.g_pool.ritnetpupil_debug:
             imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
-        
+        else:
+            cv2.destroyAllWindows()
+            
         customEllipse = self.g_pool.ritnetpupil_customellipse
         if not customEllipse:  # If custom ellipse setting is NOT toggled on
             mask = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)

@@ -264,7 +264,8 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         if self.g_pool.ellseg_debug:
             cv2.imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
-        
+        else:
+            cv2.destroyAllWindows()
         customEllipse = self.g_pool.ellseg_customellipse
         values = self.detector_ritnet_2d.detect(img)
         if not values:
@@ -337,7 +338,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                 (round(pupil_ellipse[2]), round(pupil_ellipse[3])),
                 pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
             cv2.imshow(debugOutputWindowName, seg_map_debug)
-            
+                
         confidence = self.calcConfidence(pupil_ellipse, seg_map)
 
         if self.g_pool.save_ellseg_masks == True:
