@@ -170,7 +170,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
 
         return goodness
 
-    def saveMaskAsImage(self, img, seg_map, pupil_ellipse, fileName, eye_id, flipImage = False, alpha=0.86):
+    def saveMaskAsImage(self, img, seg_map, pupil_ellipse, fileName, flipImage = False, alpha=0.86):
 
         if flipImage:
 
@@ -193,7 +193,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
 
 
         new_img_ellipse = cv2.ellipse(new_img, ((int(pupil_ellipse[0]), int(pupil_ellipse[1])),
-                                                (int(pupil_ellipse[2]), int(pupil_ellipse[3])),
+                                                (int(pupil_ellipse[2]*2.0), int(pupil_ellipse[3]*2.0)),
                                                 pupil_ellipse[4]), (255, 0, 0), 1)
 
         cv2.imwrite("{}/{}".format(imOutDir, fileName), new_img_ellipse)
@@ -226,7 +226,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
         self.g_pool.save_masks = False
-        self.g_pool.calcCustomConfidence = False
+        self.g_pool.calcCustomConfidence = True
         self.detector_ritnet_2d = RITPupilDetector(model, 4)
 
     def _stop_other_pupil_detectors(self):
@@ -292,13 +292,18 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         if self.g_pool.ellseg_reverse:
 
             seg_map = np.flip(seg_map, axis=0)
+
+            # Change format of ellseg ellipse to meet PL conventions
             height, width = seg_map.shape
             ellseg_pupil_ellipse[1] = (-ellseg_pupil_ellipse[1]+(2*height/2))
             ellseg_pupil_ellipse[4] = ellseg_pupil_ellipse[4]*-1
-        
+
+        origSeg_map = np.copy(seg_map)
+
         # OPTION 1: If custom ellipse setting is NOT toggled on
         if not customEllipse:
 
+            ## Prepare pupil mask for pupil labs ellipse fit
             # background, iris, pupil
             seg_map[np.where(seg_map == 0)] = 255
             seg_map[np.where(seg_map == 1)] = 128
@@ -311,43 +316,48 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             setattr(framedup, 'width', frame.width)
             setattr(framedup, 'height', frame.height)
             setattr(framedup, 'timestamp', frame.timestamp)
+
+            ## Apply pupil labs ellipse fit to mask
             final_result = super().detect(framedup)
 
             if self.g_pool.ellseg_debug:
 
                 final_result_ellipse = final_result["ellipse"]
                 elcenter = final_result_ellipse["center"]
-                elaxes = final_result_ellipse["axes"]
+                elaxes = final_result_ellipse["axes"] # axis diameters
 
                 seg_map_debug = np.stack((np.copy(seg_map),)*3, axis=-1)
 
                 cv2.ellipse(seg_map_debug,
                     (round(elcenter[0]), round(elcenter[1])),
-                    (round(elaxes[0]/2), round(elaxes[1]/2)),
+                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
                     final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
 
                 cv2.imshow(debugOutputWindowName, seg_map_debug)
 
-
             pl_pupil_ellipse = [final_result["ellipse"]["center"][0], final_result["ellipse"]["center"][1],
-                                final_result["ellipse"]["axes"][0], final_result["ellipse"]["axes"][1],
+                                final_result["ellipse"]["axes"][0]/2.0, final_result["ellipse"]["axes"][1]/2.0,
                                 final_result["ellipse"]["angle"]]
 
             if self.g_pool.calcCustomConfidence:
 
-                origSeg_map[np.where(origSeg_map == 0)] = 0
-                origSeg_map[np.where(origSeg_map == 1)] = 0
-                origSeg_map[np.where(origSeg_map == 2)] = 255
-                origSeg_map = np.array(origSeg_map, dtype=np.uint8)
+                # origSeg_map[np.where(origSeg_map == 0)] = 0
+                # origSeg_map[np.where(origSeg_map == 1)] = 0
+                # origSeg_map[np.where(origSeg_map == 2)] = 255
+                # origSeg_map = np.array(origSeg_map, dtype=np.uint8)
 
+                seg_map[np.where(seg_map == 0)] = 254
+                seg_map[np.where(seg_map == 255)] = 0
+                seg_map[np.where(seg_map == 128)] = 0
 
-                final_result['confidence'] = self.calcConfidence(pl_pupil_ellipse, origSeg_map)
+                seg_map = np.array(seg_map, dtype=np.uint8)
+
+                final_result['confidence'] = self.calcConfidence(pl_pupil_ellipse, seg_map)
 
             if self.g_pool.save_masks:
 
                 fname = "eye-{}_{:0.3f}_{}.png".format(eye_id, final_result['confidence'], frame.timestamp)
-                self.saveMaskAsImage(img, seg_map, pl_pupil_ellipse, fname, self.g_pool.ellseg_reverse, eye_id)
-
+                self.saveMaskAsImage(img, seg_map, pl_pupil_ellipse, fileName=fname, flipImage=self.g_pool.ellseg_reverse)
 
             return final_result
 
@@ -365,22 +375,22 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
 
             openCVformatPupil = np.copy(pupil_ellipse)
 
-            if (pupil_ellipse[4]) > np.pi / 2.0:
-                pupil_ellipse[4] = pupil_ellipse[4] - np.pi / 2.0
+            if (ellseg_pupil_ellipse[4]) > np.pi / 2.0:
+                ellseg_pupil_ellipse[4] = ellseg_pupil_ellipse[4] - np.pi / 2.0
 
-            if (pupil_ellipse[4]) < -np.pi / 2.0:
-                pupil_ellipse[4] = pupil_ellipse[4] + np.pi / 2.0
+            if (ellseg_pupil_ellipse[4]) < -np.pi / 2.0:
+                ellseg_pupil_ellipse[4] = ellseg_pupil_ellipse[4] + np.pi / 2.0
 
-            pupil_ellipse[4] = np.rad2deg(pupil_ellipse[4])
+            ellseg_pupil_ellipse[4] = np.rad2deg(ellseg_pupil_ellipse[4])
 
             #########################################
 
             if self.g_pool.ellseg_debug:
                 seg_map_debug = np.stack((np.copy(seg_map),)*3, axis=-1)
                 cv2.ellipse(seg_map_debug,
-                    (round(pupil_ellipse[0]), round(pupil_ellipse[1])),
-                    (round(pupil_ellipse[2]), round(pupil_ellipse[3])),
-                    pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
+                    (round(ellseg_pupil_ellipse[0]), round(ellseg_pupil_ellipse[1])),
+                    (round(ellseg_pupil_ellipse[2]), round(ellseg_pupil_ellipse[3])),
+                    ellseg_pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
                 cv2.imshow(debugOutputWindowName, seg_map_debug)
 
             confidence = self.calcConfidence(pupil_ellipse, seg_map)
@@ -395,12 +405,12 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             result["id"] = eye_id
             result["topic"] = f"pupil.{eye_id}.{self.identifier}"
 
-            ellipse["center"] = (pupil_ellipse[0], pupil_ellipse[1])
-            ellipse["axes"] = (pupil_ellipse[2]*2, pupil_ellipse[3]*2)
-            ellipse["angle"] = pupil_ellipse[4]
+            ellipse["center"] = (ellseg_pupil_ellipse[0], ellseg_pupil_ellipse[1])
+            ellipse["axes"] = (ellseg_pupil_ellipse[2]*2, ellseg_pupil_ellipse[3]*2)
+            ellipse["angle"] = ellseg_pupil_ellipse[4]
 
             result["ellipse"] = ellipse
-            result["diameter"] = pupil_ellipse[2]*2
+            result["diameter"] = ellseg_pupil_ellipse[2]*2
             result["location"] = ellipse["center"]
             result["confidence"] = confidence
             result["timestamp"] = frame.timestamp
