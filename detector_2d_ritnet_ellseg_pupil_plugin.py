@@ -170,16 +170,17 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
 
         return goodness
 
-    def saveMaskAsImage(self, img, seg_map, pupil_ellipse, fileName, eye_id, alpha=0.86):
+    def saveMaskAsImage(self, img, seg_map, pupil_ellipse, fileName, eye_id, flipImage = False, alpha=0.86):
 
-        imOutDir = os.path.join(os.path.dirname(__file__), "../pupilSegMasks")
-        os.makedirs(imOutDir, exist_ok=True)
-
-        if eye_id == 0:
+        if flipImage:
 
             seg_map = cv2.flip(seg_map, 0)
             pupil_ellipse[1] = img.shape[1] - pupil_ellipse[1]
             pupil_ellipse[4] = -pupil_ellipse[4]
+
+
+        imOutDir = os.path.join(os.path.dirname(__file__), "../pupilSegMasks")
+        os.makedirs(imOutDir, exist_ok=True)
 
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         colorMask = np.zeros(img.shape, img.dtype)
@@ -190,14 +191,13 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
 
         new_img = cv2.addWeighted(img, alpha, np.uint8(colorMask), 1 - alpha, 0)
 
+
         new_img_ellipse = cv2.ellipse(new_img, ((int(pupil_ellipse[0]), int(pupil_ellipse[1])),
-                                                (
-                                                int(pupil_ellipse[2] * 2), int(pupil_ellipse[3] * 2)),
+                                                (int(pupil_ellipse[2]), int(pupil_ellipse[3])),
                                                 pupil_ellipse[4]), (255, 0, 0), 1)
 
-        cv2.imwrite("{}/{}".format(imOutDir, fileName), cv2.flip(new_img_ellipse,0))
+        cv2.imwrite("{}/{}".format(imOutDir, fileName), new_img_ellipse)
 
-        #display(Image.fromarray(new_img_ellipse))
         
     def __init__(
         self,
@@ -221,10 +221,12 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         #  Initialize model
         self.isAlone = False
         self.model = model
-        self.g_pool.save_ellseg_masks = False
+
         self.g_pool.ellseg_customellipse = False
-        self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==0 else False
+        self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
+        self.g_pool.save_masks = False
+        self.g_pool.calcCustomConfidence = False
         self.detector_ritnet_2d = RITPupilDetector(model, 4)
 
     def _stop_other_pupil_detectors(self):
@@ -239,9 +241,11 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         plugin_list.clean()
     
     def detect(self, frame, **kwargs):
+
         if not self.isAlone:
             self._stop_other_pupil_detectors()
             self.isAlone = True
+
         result = {}
         ellipse = {}
         eye_id = self.g_pool.eye_id
@@ -256,124 +260,165 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         result["confidence"] = 0.0
         result["timestamp"] = frame.timestamp
         result["method"] = self.method
-            
+        result["norm_pos"] = [np.nan,np.nan]
+
         img = frame.gray
         debugOutputWindowName = None
+
         if self.g_pool.ellseg_reverse:
             img = np.flip(img, axis=0)
+
         if self.g_pool.ellseg_debug:
             cv2.imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
+
         else:
             cv2.destroyAllWindows()
+
         customEllipse = self.g_pool.ellseg_customellipse
+
         values = self.detector_ritnet_2d.detect(img)
+
         if not values:
             return result
         
         # Ellseg results are obtained - begin obtaining or returning final ellipse
         seg_map = values[0]
+        origSeg_map = np.copy(seg_map)
         
-        pupil_ellipse = values[1]
-        iris_ellipse = values[2]
+        ellseg_pupil_ellipse = values[1]
+        #iris_ellipse = values[2]
         
         if self.g_pool.ellseg_reverse:
+
             seg_map = np.flip(seg_map, axis=0)
             height, width = seg_map.shape
-            pupil_ellipse[1] = (-pupil_ellipse[1]+(2*height/2))
-            pupil_ellipse[4] = pupil_ellipse[4]*-1
+            ellseg_pupil_ellipse[1] = (-ellseg_pupil_ellipse[1]+(2*height/2))
+            ellseg_pupil_ellipse[4] = ellseg_pupil_ellipse[4]*-1
         
         # OPTION 1: If custom ellipse setting is NOT toggled on
         if not customEllipse:
+
             # background, iris, pupil
             seg_map[np.where(seg_map == 0)] = 255
             seg_map[np.where(seg_map == 1)] = 128
             seg_map[np.where(seg_map == 2)] = 0
             seg_map = np.array(seg_map, dtype=np.uint8)
             framedup = lambda: None
+
             setattr(framedup, 'gray', seg_map)
             setattr(framedup, 'bgr', frame.bgr)
             setattr(framedup, 'width', frame.width)
             setattr(framedup, 'height', frame.height)
             setattr(framedup, 'timestamp', frame.timestamp)
             final_result = super().detect(framedup)
+
             if self.g_pool.ellseg_debug:
+
                 final_result_ellipse = final_result["ellipse"]
                 elcenter = final_result_ellipse["center"]
                 elaxes = final_result_ellipse["axes"]
+
                 seg_map_debug = np.stack((np.copy(seg_map),)*3, axis=-1)
+
                 cv2.ellipse(seg_map_debug,
                     (round(elcenter[0]), round(elcenter[1])),
                     (round(elaxes[0]/2), round(elaxes[1]/2)),
                     final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
+
                 cv2.imshow(debugOutputWindowName, seg_map_debug)
+
+
+            pl_pupil_ellipse = [final_result["ellipse"]["center"][0], final_result["ellipse"]["center"][1],
+                                final_result["ellipse"]["axes"][0], final_result["ellipse"]["axes"][1],
+                                final_result["ellipse"]["angle"]]
+
+            if self.g_pool.calcCustomConfidence:
+
+                origSeg_map[np.where(origSeg_map == 0)] = 0
+                origSeg_map[np.where(origSeg_map == 1)] = 0
+                origSeg_map[np.where(origSeg_map == 2)] = 255
+                origSeg_map = np.array(origSeg_map, dtype=np.uint8)
+
+
+                final_result['confidence'] = self.calcConfidence(pl_pupil_ellipse, origSeg_map)
+
+            if self.g_pool.save_masks:
+
+                fname = "eye-{}_{:0.3f}_{}.png".format(eye_id, final_result['confidence'], frame.timestamp)
+                self.saveMaskAsImage(img, seg_map, pl_pupil_ellipse, fname, self.g_pool.ellseg_reverse, eye_id)
+
+
             return final_result
-        
-        # OPTION 2: If custom ellipse setting is toggled on
-        #########################################
-        ### Ellipse data transformations
-        
-        # background, iris, pupil
-        seg_map[np.where(seg_map == 0)] = 0
-        seg_map[np.where(seg_map == 1)] = 0
-        seg_map[np.where(seg_map == 2)] = 255
-        seg_map = np.array(seg_map, dtype=np.uint8)
-            
-        openCVformatPupil = np.copy(pupil_ellipse)
 
-        if (pupil_ellipse[4]) > np.pi / 2.0:
-            pupil_ellipse[4] = pupil_ellipse[4] - np.pi / 2.0
+        elif customEllipse:
 
-        if (pupil_ellipse[4]) < -np.pi / 2.0:
-            pupil_ellipse[4] = pupil_ellipse[4] + np.pi / 2.0
+            # OPTION 2: If custom ellipse setting is toggled on
+            #########################################
+            ### Ellipse data transformations
 
-        pupil_ellipse[4] = np.rad2deg(pupil_ellipse[4])
+            # background, iris, pupil
+            seg_map[np.where(seg_map == 0)] = 0
+            seg_map[np.where(seg_map == 1)] = 0
+            seg_map[np.where(seg_map == 2)] = 255
+            seg_map = np.array(seg_map, dtype=np.uint8)
 
-        #########################################
-        
-        if self.g_pool.ellseg_debug:
-            seg_map_debug = np.stack((np.copy(seg_map),)*3, axis=-1)
-            cv2.ellipse(seg_map_debug,
-                (round(pupil_ellipse[0]), round(pupil_ellipse[1])),
-                (round(pupil_ellipse[2]), round(pupil_ellipse[3])),
-                pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
-            cv2.imshow(debugOutputWindowName, seg_map_debug)
-                
-        confidence = self.calcConfidence(pupil_ellipse, seg_map)
+            openCVformatPupil = np.copy(pupil_ellipse)
 
-        if self.g_pool.save_ellseg_masks == True:
-            fname = "eye-{}_{:0.3f}.png".format(eye_id, confidence)
-            self.saveMaskAsImage(img,seg_map,openCVformatPupil,fname,eye_id)
+            if (pupil_ellipse[4]) > np.pi / 2.0:
+                pupil_ellipse[4] = pupil_ellipse[4] - np.pi / 2.0
+
+            if (pupil_ellipse[4]) < -np.pi / 2.0:
+                pupil_ellipse[4] = pupil_ellipse[4] + np.pi / 2.0
+
+            pupil_ellipse[4] = np.rad2deg(pupil_ellipse[4])
+
+            #########################################
+
+            if self.g_pool.ellseg_debug:
+                seg_map_debug = np.stack((np.copy(seg_map),)*3, axis=-1)
+                cv2.ellipse(seg_map_debug,
+                    (round(pupil_ellipse[0]), round(pupil_ellipse[1])),
+                    (round(pupil_ellipse[2]), round(pupil_ellipse[3])),
+                    pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
+                cv2.imshow(debugOutputWindowName, seg_map_debug)
+
+            confidence = self.calcConfidence(pupil_ellipse, seg_map)
+
+            if self.g_pool.save_masks == True:
+                fname = "eye-{}_{:0.3f}.png".format(eye_id, confidence)
+                self.saveMaskAsImage(img,seg_map,openCVformatPupil,fname,eye_id)
 
 
-        eye_id = self.g_pool.eye_id
-        result["id"] = eye_id
-        result["topic"] = f"pupil.{eye_id}.{self.identifier}"
+            eye_id = self.g_pool.eye_id
 
-        ellipse["center"] = (pupil_ellipse[0], pupil_ellipse[1])
-        ellipse["axes"] = (pupil_ellipse[2]*2, pupil_ellipse[3]*2)
-        ellipse["angle"] = pupil_ellipse[4]
+            result["id"] = eye_id
+            result["topic"] = f"pupil.{eye_id}.{self.identifier}"
 
-        result["ellipse"] = ellipse
-        result["diameter"] = pupil_ellipse[2]*2
-        result["location"] = ellipse["center"]
-        result["confidence"] = confidence
-        result["timestamp"] = frame.timestamp
-        #logger.debug(result)
+            ellipse["center"] = (pupil_ellipse[0], pupil_ellipse[1])
+            ellipse["axes"] = (pupil_ellipse[2]*2, pupil_ellipse[3]*2)
+            ellipse["angle"] = pupil_ellipse[4]
 
-        location = result["location"]
+            result["ellipse"] = ellipse
+            result["diameter"] = pupil_ellipse[2]*2
+            result["location"] = ellipse["center"]
+            result["confidence"] = confidence
+            result["timestamp"] = frame.timestamp
+            #logger.debug(result)
 
-        norm_pos = normalize(location, (frame.width, frame.height), flip_y= True)
+            location = result["location"]
 
-        result["norm_pos"] = norm_pos
+            norm_pos = normalize(location, (frame.width, frame.height), flip_y= True)
 
-        try:
-            self.g_pool.ellSegDetector[str(self.g_pool.eye_id)] = result
-        except:
-            self.g_pool.ellSegDetector = {str(self.g_pool.eye_id): result}
+            result["norm_pos"] = norm_pos
 
-        return result
-        
+            try:
+                self.g_pool.ellSegDetector[str(self.g_pool.eye_id)] = result
+            except:
+                self.g_pool.ellSegDetector = {str(self.g_pool.eye_id): result}
+
+            return result
+
     def gl_display(self):
         if self._recent_detection_result:
             draw_pupil_outline(self._recent_detection_result, color_rgb=(1, 0, 1))
@@ -407,6 +452,24 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                 label="Enable Debug Mode"
             )
         )
+
+        self.menu.append(
+            ui.Switch(
+                "save_masks",
+                self.g_pool,
+                label="Save segmentation masks to disk"
+            )
+        )
+
+        self.menu.append(
+            ui.Switch(
+                "calcCustomConfidence",
+                self.g_pool,
+                label="Use custom confidence metric"
+            )
+        )
+
+
         """
         self.menu.append(
             ui.Slider(
