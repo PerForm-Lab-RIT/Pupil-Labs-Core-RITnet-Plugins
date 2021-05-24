@@ -7,7 +7,9 @@ import os
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..','..','pupil_src','shared_modules','pupil_detector_plugins'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..','..','pupil_src','shared_modules','pupil_detector_plugins'))
+#sys.path.append(os.path.join(os.path.dirname(__file__), 'ritnet'))
+#sys.path.append(os.path.join(os.path.dirname(__file__), 'ritnet', 'Ellseg'))
 from visualizer_2d import draw_pupil_outline
 from pupil_detectors import DetectorBase
 from pupil_detector_plugins.detector_base_plugin import PupilDetectorPlugin
@@ -22,14 +24,12 @@ from pyglui import ui
 
 from ritnet.image import get_mask_from_PIL_image, init_model, get_pupil_ellipse_from_PIL_image
 from ritnet.models import model_dict, model_channel_dict
-from ritnet.Ellseg.args import parse_precision
-from ritnet.Ellseg.pytorchtools import load_from_file
 
 from cv2 import imshow
 import cv2
 
-ritnet_directory = os.path.join(os.path.dirname(__file__), 'ritnet\\')
-filename = "ritnet_pupil.pkl" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
+ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet\\')
+filename = "best_model.pkl" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
 MODEL_DICT_STR, CHANNELS, IS_ELLSEG, ELLSEG_MODEL = model_channel_dict[filename]
 ELLSEG_PRECISION = 0
 USEGPU = True
@@ -54,18 +54,18 @@ class RITPupilDetector(DetectorBase):
             return get_pupil_ellipse_from_PIL_image(img, self._model, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION, debugWindowName=debugOutputWindowName)
         return np.array(get_mask_from_PIL_image(img, self._model, channels=CHANNELS, trim_pupil=False, isEllseg=IS_ELLSEG, ellsegPrecision=ELLSEG_PRECISION, useEllsegEllipseAsMask=False)*255).astype(np.ubyte)
 
-class Detector2DRITnetPupilPlugin(Detector2DPlugin):
+class Detector2DRITnetBestmodelPlugin(Detector2DPlugin):
     uniqueness = "by_class"
-    icon_chr = "RP"
+    icon_chr = "RB"
 
-    label = "RITnet ritnet_pupil 2d detector"
-    identifier = "ritnet-pupil-2d"
+    label = "RITnet ritnet_bestmodel 2d detector"
+    identifier = "ritnet-bestmodel-2d"
     method = "2d c++"
     order = 0.08
-    
+
     @property
     def pretty_class_name(self):
-        return "RITnet Detector (ritnet_pupil)"
+        return "RITnet Detector (ritnet_bestmodel)"
         
     @property
     def pupil_detector(self) -> RITPupilDetector:
@@ -88,16 +88,16 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
             useMultiGPU = True
         else:
             useMultiGPU = False
+            
         model = model_dict[MODEL_DICT_STR]
-    
         model  = model.to(device)
         model.load_state_dict(torch.load(ritnet_directory+filename))
         model = model.to(device)
         model.eval()
         
-        self.g_pool.ritnetpupil_customellipse = False
-        self.g_pool.ritnetpupil_reverse = True if self.g_pool.eye_id==0 else False
-        self.g_pool.ritnetpupil_debug = False
+        self.g_pool.bestmodel_customellipse = False
+        self.g_pool.bestmodel_reverse = True if self.g_pool.eye_id==1 else False
+        self.g_pool.bestmodel_debug = False
         self.isAlone = False
         self.model = model
         self.detector_ritnet_2d = RITPupilDetector(model, 4)
@@ -108,6 +108,7 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
         # Deactivate other PupilDetectorPlugin instances
         for plugin in plugin_list:
             if plugin.alive is True and isinstance(plugin, PupilDetectorPlugin) and plugin is not self and not isinstance(plugin, Pye3DPlugin):
+                logger.log(level=logging.DEBUG, msg="STOPPING A PLUGIN")
                 plugin.alive = False
 
         # Force Plugin_List to remove deactivated plugins
@@ -131,21 +132,21 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
         result["confidence"] = 0.0
         result["timestamp"] = frame.timestamp
         result["method"] = self.method
-            
+        
         img = frame.gray
         debugOutputWindowName = None
-        if self.g_pool.ritnetpupil_reverse:
+        if self.g_pool.bestmodel_reverse:
             img = np.flip(img, axis=0)
-        if self.g_pool.ritnetpupil_debug:
+        if self.g_pool.bestmodel_debug:
             imshow('EYE'+str(eye_id)+' INPUT', img)
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
         else:
             cv2.destroyAllWindows()
-            
-        customEllipse = self.g_pool.ritnetpupil_customellipse
+        
+        customEllipse = self.g_pool.bestmodel_customellipse
         if not customEllipse:  # If custom ellipse setting is NOT toggled on
             mask = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)
-            if self.g_pool.ritnetpupil_reverse:
+            if self.g_pool.bestmodel_reverse:
                 mask = np.flip(mask, axis=0)
                 mask = mask.copy(order='C')
             framedup = lambda: None
@@ -155,7 +156,7 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
             setattr(framedup, 'height', frame.height)
             setattr(framedup, 'timestamp', frame.timestamp)
             final_result = super().detect(framedup)
-            if self.g_pool.ritnetpupil_debug:
+            if self.g_pool.bestmodel_debug:
                 final_result_ellipse = final_result["ellipse"]
                 elcenter = final_result_ellipse["center"]
                 elaxes = final_result_ellipse["axes"]
@@ -169,8 +170,9 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
         
         # If custom ellipse setting is toggled on
         ellipsedata = self.detector_ritnet_2d.detect(img, customEllipse, debugOutputWindowName=debugOutputWindowName)
+        
         if ellipsedata is not None:
-            if self.g_pool.ritnetpupil_reverse:
+            if self.g_pool.bestmodel_reverse:
                 height, width = img.shape
                 ellipsedata[1] = (-ellipsedata[1]+(2*height/2))
                 ellipsedata[4] = ellipsedata[4]*-1
@@ -188,11 +190,11 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
 
         #eye_id = self.g_pool.eye_id
         location = result["location"]
+
         norm_pos = normalize(
             location, (frame.width, frame.height), flip_y=True
         )
         result["norm_pos"] = norm_pos
-        result["method"] = "2d c++"
         #result["timestamp"] = frame.timestamp
         #result["topic"] = f"pupil.{eye_id}.{self.identifier}"
         #result["id"] = eye_id
@@ -203,33 +205,33 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
         
     def gl_display(self):
         if self._recent_detection_result:
-            draw_pupil_outline(self._recent_detection_result, color_rgb=(0, 1, 0))
+            draw_pupil_outline(self._recent_detection_result, color_rgb=(1, 0.5, 0))
     
     def init_ui(self):
         super(Detector2DPlugin, self).init_ui()
         self.menu.label = self.pretty_class_name
         self.menu_icon.label_font = "pupil_icons"
         info = ui.Info_Text(
-            "(GREEN) Model using RITnet, the \"ritnet_pupil\" model."
+            "(Orange) Model using RITnet, the \"ritnet_bestmodel\" model."
         )
         self.menu.append(info)
         self.menu.append(
             ui.Switch(
-                "ritnetpupil_reverse",
+                "bestmodel_reverse",
                 self.g_pool,
                 label="Flip image horizontally and vertically before processing"
             )
         )
         self.menu.append(
             ui.Switch(
-                "ritnetpupil_customellipse",
+                "bestmodel_customellipse",
                 self.g_pool,
                 label="Use Custom Ellipse Finding Algorithm"
             )
         )
         self.menu.append(
             ui.Switch(
-                "ritnetpupil_debug",
+                "bestmodel_debug",
                 self.g_pool,
                 label="Enable Debug Mode"
             )

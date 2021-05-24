@@ -4,7 +4,7 @@
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..','..','pupil_src','shared_modules','pupil_detector_plugins'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..','..','pupil_src','shared_modules','pupil_detector_plugins'))
 #sys.path.append(os.path.join(os.path.dirname(__file__), 'ritnet', 'Ellseg'))
 from visualizer_2d import draw_pupil_outline
 from pupil_detectors import DetectorBase
@@ -28,9 +28,9 @@ import cv2
 from ritnet.Ellseg.evaluate_ellseg import parse_args, evaluate_ellseg_on_image_GD, preprocess_frame,rescale_to_original
 from ritnet.Ellseg.modelSummary import model_dict as ellseg_model_dict
 MODEL_DICT_KEY = 'ritnet_v2'
-WEIGHT_LOCATIONS = os.path.join(os.path.dirname(__file__), 'ritnet', 'Ellseg', 'weights', 'all.git_ok')
+WEIGHT_LOCATIONS = os.path.join(os.path.dirname(__file__), '..', 'ritnet', 'Ellseg', 'weights', 'all.git_ok')
 
-ritnet_directory = os.path.join(os.path.dirname(__file__), 'ritnet\\')
+ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet\\')
 filename = "ellseg_allvsone" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
 IS_ELLSEG = True
 USEGPU = True
@@ -223,7 +223,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         self.model = model
         self.g_pool.save_ellseg_masks = False
         self.g_pool.ellseg_customellipse = False
-        self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==0 else False
+        self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
         self.detector_ritnet_2d = RITPupilDetector(model, 4)
 
