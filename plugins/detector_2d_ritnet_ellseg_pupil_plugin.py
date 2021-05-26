@@ -221,7 +221,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         self.isAlone = False
         self.model = model
 
-        self.g_pool.ellseg_customellipse = False
+        self.g_pool.ellseg_customellipse = True if "--custom-ellipse" in sys.argv else False
         self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
         self.g_pool.save_masks = True if ("--save-masks=0" in sys.argv and self.g_pool.eye_id==0) or ("--save-masks=1" in sys.argv and self.g_pool.eye_id==1) or "--save-masks=both" in sys.argv else False
@@ -372,7 +372,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             seg_map[np.where(seg_map == 2)] = 255
             seg_map = np.array(seg_map, dtype=np.uint8)
 
-            openCVformatPupil = np.copy(pupil_ellipse)
+            openCVformatPupil = np.copy(ellseg_pupil_ellipse)
 
             if (ellseg_pupil_ellipse[4]) > np.pi / 2.0:
                 ellseg_pupil_ellipse[4] = ellseg_pupil_ellipse[4] - np.pi / 2.0
@@ -392,7 +392,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                     ellseg_pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
                 cv2.imshow(debugOutputWindowName, seg_map_debug)
 
-            confidence = self.calcConfidence(pupil_ellipse, seg_map)
+            confidence = self.calcConfidence(ellseg_pupil_ellipse, seg_map)
 
             if self.g_pool.save_masks == True:
                 fname = "eye-{}_{:0.3f}.png".format(eye_id, confidence)
