@@ -224,7 +224,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         self.g_pool.ellseg_customellipse = False
         self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
-        self.g_pool.save_masks = False
+        self.g_pool.save_masks = True if ("--save-masks=0" in sys.argv and self.g_pool.eye_id==0) or ("--save-masks=1" in sys.argv and self.g_pool.eye_id==1) or "--save-masks=both" in sys.argv else False
         self.g_pool.calcCustomConfidence = True
         self.detector_ritnet_2d = RITPupilDetector(model, 4)
 
