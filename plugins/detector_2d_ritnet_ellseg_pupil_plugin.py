@@ -178,8 +178,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             pupil_ellipse[1] = img.shape[1] - pupil_ellipse[1]
             pupil_ellipse[4] = -pupil_ellipse[4]
 
-
-        imOutDir = os.path.join(os.path.dirname(__file__), "../pupilSegMasks")
+        imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_masks")
         os.makedirs(imOutDir, exist_ok=True)
 
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
