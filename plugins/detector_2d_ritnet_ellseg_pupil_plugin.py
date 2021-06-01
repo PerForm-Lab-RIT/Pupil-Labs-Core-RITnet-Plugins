@@ -179,13 +179,32 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             pupil_ellipse[4] = -pupil_ellipse[4]
 
         imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_masks")
+        imOutDir2 = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_masks2")
         os.makedirs(imOutDir, exist_ok=True)
+        os.makedirs(imOutDir2, exist_ok=True)
 
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         colorMask = np.zeros(img.shape, img.dtype)
         colorMask[:, :] = (0, 255, 255)
         colorMask = cv2.bitwise_and(colorMask, colorMask, mask=seg_map)
-
+        
+        new_seg_map = cv2.ellipse(np.zeros(img.shape, img.dtype), ((int(pupil_ellipse[0]), int(pupil_ellipse[1])),
+                                                (int(pupil_ellipse[2]*2.0), int(pupil_ellipse[3]*2.0)),
+                                                pupil_ellipse[4]), (0, 0, 255), -1)
+        new_seg_map[seg_map == 254, 0] = 255
+        logical_combo = np.all(
+            new_seg_map == (255, 0, 255),
+            axis=-1
+        )
+        new_seg_map[logical_combo, :] = (0, 255, 0)
+        
+        new_seg_map = cv2.putText(new_seg_map, "mask", (5, 25), cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 2, cv2.LINE_AA)
+        new_seg_map = cv2.putText(new_seg_map, "mask", (5, 25), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 1, cv2.LINE_AA)
+        new_seg_map = cv2.putText(new_seg_map, "ellipse", (5, 55), cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 2, cv2.LINE_AA)
+        new_seg_map = cv2.putText(new_seg_map, "ellipse", (5, 55), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), 1, cv2.LINE_AA)
+        new_seg_map = cv2.putText(new_seg_map, "overlap", (5, 85), cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 2, cv2.LINE_AA)
+        new_seg_map = cv2.putText(new_seg_map, "overlap", (5, 85), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 1, cv2.LINE_AA)
+        
         #(thresh, new_seg) = cv2.threshold(seg_map, 1, 100, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
         new_img = cv2.addWeighted(img, alpha, np.uint8(colorMask), 1 - alpha, 0)
@@ -196,7 +215,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                                                 pupil_ellipse[4]), (255, 0, 0), 1)
 
         cv2.imwrite("{}/{}".format(imOutDir, fileName), new_img_ellipse)
-
+        cv2.imwrite("{}/{}".format(imOutDir2, fileName), new_seg_map)
         
     def __init__(
         self,
@@ -272,7 +291,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
 
         else:
-            cv2.destroyAllWindows()
+            cv2.destroyWindow('EYE'+str(eye_id)+' INPUT')
 
         customEllipse = self.g_pool.ellseg_customellipse
 
