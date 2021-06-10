@@ -393,12 +393,17 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                 seg_map = np.array(seg_map, dtype=np.uint8)
 
                 final_result['confidence'] = self.calcConfidence(pl_pupil_ellipse, seg_map, debug_confidence_timestamp=frame.timestamp)
-
+            
             if self.g_pool.save_masks:
-
                 fname = "eye-{}_{:0.3f}_{}.png".format(eye_id, final_result['confidence'], frame.timestamp)
                 self.saveMaskAsImage(img, seg_map, pl_pupil_ellipse, fileName=fname, flipImage=self.g_pool.ellseg_reverse)
-
+            
+            if final_result['diameter'] < self.g_pool.ellseg_pupil_size_min:
+                final_result["ellipse"] = {"center": (0.0, 0.0), "axes": (0.0, 0.0), "angle": 0.0}
+                final_result["diameter"] = 0.0
+                final_result["location"] = (0.0, 0.0)
+                final_result['confidence'] = 0.0
+            
             return final_result
 
         elif customEllipse:
@@ -466,7 +471,13 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                 self.g_pool.ellSegDetector[str(self.g_pool.eye_id)] = result
             except:
                 self.g_pool.ellSegDetector = {str(self.g_pool.eye_id): result}
-
+            
+            if result['diameter'] < self.g_pool.ellseg_pupil_size_min:
+                result["ellipse"] = {"center": (0.0, 0.0), "axes": (0.0, 0.0), "angle": 0.0}
+                result["diameter"] = 0.0
+                result["location"] = (0.0, 0.0)
+                result['confidence'] = 0.0
+            
             return result
 
     def gl_display(self):
