@@ -67,6 +67,7 @@ class RITPupilDetector(DetectorBase):
             # evaluate_ellseg_on_image_GD will return false on a failure to fit the ellipse
             return None
 
+
 class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
     uniqueness = "by_class"
     icon_chr = "RE"
@@ -76,7 +77,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
     method = "2d c++"
     order = 0.08
     pupil_detection_plugin = "2d c++"
-    
+
     @property
     def pretty_class_name(self):
         return "RITnet Detector (ellseg_allvsone)"
@@ -95,10 +96,12 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         angle = ellipse[2] * np.pi / 180
         ## define a rotation matrix
         rotation_matrix = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
-        ## translate points and ellipse to origin
+        ## translate points and ellipse to origin      
+        
         points = points - center
         ## align points so that ellipse axis is aligned with coordinate system
         points = np.dot(points, rotation_matrix)
+
         ## normalize to a unit circle
         points /= np.array((major_radius, minor_radius))
         ## compute the Pythagorean distance
@@ -150,15 +153,19 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         new_contours = np.flip(np.transpose(np.nonzero(new_edges)), axis=1)
         return new_contours
 
-    def calcConfidence(self, pupil_ellipse, seg_map):
+    def calcConfidence(self, pupil_ellipse, seg_map, debug_confidence_timestamp=None):
 
         maskEdges = np.uint8(cv2.Canny(np.uint8(seg_map), 1, 2))
         _, contours, _ = cv2.findContours(np.uint8(seg_map), 1, 2)
         contours = max(contours, key=cv2.contourArea)
         final_edges = self.resolve_contour(contours, maskEdges)
-
+        
         result = pupil_ellipse
-
+        #temp = np.zeros(seg_map.shape)
+        #cv2.drawContours(temp, contours, -1, 255, 1)
+        #cv2.imshow('Contours' + str(self.g_pool.eye_id), temp)
+        #cv2.imshow('maskEdges' + str(self.g_pool.eye_id), maskEdges)
+        
         # GD:  Changed indices to major/minor axes.  Previously, both pointed to the major axis.
         ellipse_circum = self.ellipse_circumference(result[2], result[3])  # radii
 
@@ -167,7 +174,17 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         support_ratio = ((len(support_pixels) / ellipse_circum))
         goodness = np.minimum(0.99, support_ratio) * np.power(len(support_pixels) / len(final_edges),
                                                               support_pixel_ratio_exponent)
-
+        
+        if debug_confidence_timestamp is not None:
+            imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_confidence_supportpixels")
+            os.makedirs(imOutDir, exist_ok=True)
+            im = np.zeros(seg_map.shape)
+            for i in range(0, len(support_pixels)):
+                im[support_pixels[i, 0], support_pixels[i, 1]] = 255
+            im = np.uint8(im)
+            fileName = "eye-{}_{:0.3f}_{}.png".format(self.g_pool.eye_id, goodness, debug_confidence_timestamp)
+            cv2.imwrite("{}/{}".format(imOutDir, fileName), im)
+        
         return goodness
 
     def saveMaskAsImage(self, img, seg_map, pupil_ellipse, fileName, flipImage = False, alpha=0.86):
@@ -239,7 +256,12 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         #  Initialize model
         self.isAlone = False
         self.model = model
-
+        
+        def condition(x): return "--min_pupil_size=" in x
+        output = [idx for idx, element in enumerate(sys.argv) if condition(element)]
+        min_pupil_size = int(sys.argv[output[0]][sys.argv[output[0]].rfind('=')+1:]) if len(output) > 0 else 1
+        self.g_pool.ellseg_pupil_size_min = min_pupil_size
+        
         self.g_pool.ellseg_customellipse = True if "--custom-ellipse" in sys.argv else False
         self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
@@ -370,7 +392,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
 
                 seg_map = np.array(seg_map, dtype=np.uint8)
 
-                final_result['confidence'] = self.calcConfidence(pl_pupil_ellipse, seg_map)
+                final_result['confidence'] = self.calcConfidence(pl_pupil_ellipse, seg_map, debug_confidence_timestamp=frame.timestamp)
 
             if self.g_pool.save_masks:
 
@@ -459,6 +481,16 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             "(PURPLE) Model using EllSeg, the \"allvsone\" model."
         )
         self.menu.append(info)
+        self.menu.append(
+            ui.Slider(
+                "ellseg_pupil_size_min",
+                self.g_pool,
+                label="Pupil min diameter (pixels)",
+                min=1,
+                max=250,
+                step=1,
+            )
+        )
         self.menu.append(
             ui.Switch(
                 "ellseg_reverse",
