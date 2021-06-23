@@ -21,7 +21,6 @@ while getopts ":hv" OPTION; do
 			exit
 			;;
 		v )
-			echo "You set verbose!"
 			VERBOSE=1
 			;;
 		\? )
@@ -43,52 +42,42 @@ run_pupil () {
 	SAVE_EYE0=$5
 	SAVE_EYE1=$6
 	CUSTOMELLIPSE=$7
-	
-	PLUGIN=$(echo $PLUGIN | tr -d '\r')
-	CUSTOMELLIPSE=$(echo $CUSTOMELLIPSE | tr -d '\r')
-
+	MINIMUMDIAMETER=$8
 	
 	if [ "$SAVE_EYE0" = "true" ] && [ "$SAVE_EYE1" = "true" ]
 	then
-		echo "Save Eye 0 Masks:         True"
-		echo "Save Eye 1 Masks:         True"
 		SAVE_MASKS="both"
 	elif [ "$SAVE_EYE0" = "true" ]
 	then
-		echo "Save Eye 0 Masks:         True"
-		echo "Save Eye 1 Masks:         False"
 		SAVE_MASKS="0"
 	elif [ "$SAVE_EYE1" = "true" ]
 	then
-		echo "Save Eye 0 Masks:         False"
-		echo "Save Eye 1 Masks:         True"
 		SAVE_MASKS="1"
 	else
-		echo "Save Eye 0 Masks:         False"
-		echo "Save Eye 1 Masks:         False"
 		SAVE_MASKS="none"
 	fi
 	
 	if [ "$CUSTOMELLIPSE" = "true" ]
 	then
-		echo "Custom Ellipse Finder:    True"
 		CUSTOMELLIPSE="--custom-ellipse"
 	else
-		echo "Custom Ellipse Finder:    False"
 		CUSTOMELLIPSE=""
 	fi
-
+	
+	PLUGIN=$(echo $PLUGIN | tr -d '\r')
 	NEWDIR="$SCRIPT_DIR/$COUNT - $NAME"
 	cp -r "$VIDEOFOLDER" "$NEWDIR"
 	rm -r "$NEWDIR/offline_data"
+	mkdir "$NEWDIR/offline_data"
+	cp "$VIDEOFOLDER/offline_data/reference_locations.msgpack" "$NEWDIR/offline_data/reference_locations.msgpack"
 	old="$(pwd)"
 	cd "$PUPIL_LOCATION/pupil_src"
 	
 	if [ "$VERBOSE" = 0 ]
 	then
-		python "main.py" "player" "$NEWDIR" --plugin=$PLUGIN --save-masks=$SAVE_MASKS $CUSTOMELLIPSE >nul 2>nul >/dev/null &
+		python "main.py" "player" "$NEWDIR" --plugin=$PLUGIN --save-masks=$SAVE_MASKS $CUSTOMELLIPSE --min_pupil_size=$MINIMUMDIAMETER >nul 2>nul >/dev/null &
 	else
-		python "main.py" "player" "$NEWDIR" --plugin=$PLUGIN --save-masks=$SAVE_MASKS $CUSTOMELLIPSE &
+		python "main.py" "player" "$NEWDIR" --plugin=$PLUGIN --save-masks=$SAVE_MASKS $CUSTOMELLIPSE --min_pupil_size=$MINIMUMDIAMETER &
 	fi
 	
 	PROCESS=$!
@@ -97,29 +86,29 @@ run_pupil () {
 	do
 		sleep 0.2
 	done
-	kill -9 $PROCESS
-	sleep 5
+	# kill -9 $PROCESS
+	# sleep 5
 	wait
 	cd "$old"
 }
 
-echo "Starting..."
 total=$(wc -l $IN_FILE)
 count=1
 {
 	read
 	while IFS=, read -r line; do
-		echo "$count / $total"
+		# ...
 		oIFS="$IFS"
 		IFS="," read -ra ADDR <<< "$line"
-		run_pupil "${ADDR[0]}" "${ADDR[1]}" "${ADDR[2]}" "$count" "${ADDR[3]}" "${ADDR[4]}" "${ADDR[5]}"
+		run_pupil "${ADDR[0]}" "${ADDR[1]}" "${ADDR[2]}" "$count" "${ADDR[3]}" "${ADDR[4]}" "${ADDR[5]}" "${ADDR[6]}"
 		IFS="$oIFS"
+		echo "$count / $total"
 		[[ "$line" == *","* ]] && ((++count))
 	done
 } < $IN_FILE; \
 
 IFS="," read -ra ADDR <<< "$line"
+run_pupil "${ADDR[0]}" "${ADDR[1]}" "${ADDR[2]}" "$count" "${ADDR[3]}" "${ADDR[4]}" "${ADDR[5]}" "${ADDR[6]}"
 echo "$count / $total"
-run_pupil "${ADDR[0]}" "${ADDR[1]}" "${ADDR[2]}" "$count" "${ADDR[3]}" "${ADDR[4]}" "${ADDR[5]}"
 echo "done"
 sleep infinity

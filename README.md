@@ -14,13 +14,11 @@ Pupil detector plugins for Pupil Labs Core that integrate various RITnet and Ell
   where <in_file> is the location of your instructions .csv, and <pupil_folder> is your Pupil Labs Core install location (the folder containing the *pupil_src/* folder).
 
 ## **Example Autorun CSV**
-| RUN_NAME      | VIDEO_PATH | PLUGIN | SAVE_EYE0_MASKS | SAVE_EYE1_MASKS | CUSTOM_ELLIPSE |
-| ----------- | ----------- | ----------- | ----------- | ----------- | ----------- |
-| Subject 1 Vanilla      | C:\\...\P_201218121321_sub1\S001\PupilData\000 | vanilla | false | false | false |
-| Subject 1 Ellseg   | C:\\...\P_201218121321_sub1\S001\PupilData\000 | ellseg | true | true | false |
-| Subject 2 Vanilla   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | vanilla | false | false | false |
-| Subject 2 Ellseg   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | ellseg | true | true | true |
-| Subject 2 Bestmodel   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | bestmodel | false | false | false |
-| Subject 2 RITnet Pupil   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | ritnetpupil | false | false | false |
-
-- Note: **SAVE_EYE0_MASKS**, **SAVE_EYE1_MASKS**, and **CUSTOM_ELLIPSE** presently only work with **PLUGIN**: *ellseg*
+| RUN_NAME      | VIDEO_PATH | PLUGIN |
+| ----------- | ----------- | ----------- |
+| Subject 1 Vanilla      | C:\\...\P_201218121321_sub1\S001\PupilData\000 | vanilla |
+| Subject 1 Ellseg   | C:\\...\P_201218121321_sub1\S001\PupilData\000 | ellseg |
+| Subject 2 Vanilla   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | vanilla |
+| Subject 2 Ellseg   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | ellseg |
+| Subject 2 Bestmodel   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | bestmodel |
+| Subject 2 RITnet Pupil   | C:\\...\P_201219105516_sub2\S001\PupilData\000 | ritnetpupil |
