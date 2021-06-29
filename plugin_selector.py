@@ -1,6 +1,8 @@
 import sys
 if "--plugin=ellseg" in sys.argv:                                   # ELLSEG
     from plugins.detector_2d_ritnet_ellseg_pupil_plugin import *
+if "--plugin=ellseg_v2" in sys.argv:                                # ELLSEG V2
+    from plugins.detector_2d_ritnet_ellsegv2_pupil_plugin import *
 elif "--plugin=bestmodel" in sys.argv:                              # BESTMODEL
     from plugins.detector_2d_ritnet_bestmodel_plugin import *
 elif "--plugin=ritnetpupil" in sys.argv:                            # RITNET PUPIL
