@@ -9,7 +9,7 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 
-from helperfunctions.utils import create_meshgrid, soft_heaviside
+from ..helperfunctions.utils import create_meshgrid, soft_heaviside
 
 def get_seg_loss(gt_dict, pd_dict, alpha):
     # Custom function to iteratively go over each sample in a batch and

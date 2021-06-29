@@ -172,7 +172,7 @@ def make_args():
                         save the final test results')
 
     # %% Parse arguments
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     if args.mode == 'one_vs_one':
         print('One vs One mode')

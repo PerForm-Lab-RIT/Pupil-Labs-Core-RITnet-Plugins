@@ -11,8 +11,8 @@ import random
 import numpy as np
 import imgaug.augmenters as iaa
 
-from helperfunctions.helperfunctions import plot_images_with_annotations
-from helperfunctions.helperfunctions import pad_to_shape, scale_by_ratio
+from ..helperfunctions.helperfunctions import plot_images_with_annotations
+from ..helperfunctions.helperfunctions import pad_to_shape, scale_by_ratio
 
 # Only for debugging purposes
 # from helperfunctions import plot_images_with_annotations

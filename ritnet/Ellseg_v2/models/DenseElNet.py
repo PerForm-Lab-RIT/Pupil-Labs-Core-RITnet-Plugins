@@ -12,17 +12,17 @@ import torch.nn.functional as F
 import sys
 sys.path.append('..')
 
-from helperfunctions.loss import get_com
-from helperfunctions.utils import detach_cpu_np, conv_layer
-from helperfunctions.utils import regressionModule, linStack, convBlock
+from ..helperfunctions.loss import get_com
+from ..helperfunctions.utils import detach_cpu_np, conv_layer
+from ..helperfunctions.utils import regressionModule, linStack, convBlock
 
-from helperfunctions.helperfunctions import plot_images_with_annotations
-from helperfunctions.helperfunctions import construct_mask_from_ellipse
-from helperfunctions.helperfunctions import fix_ellipse_axis_angle
-from helperfunctions.helperfunctions import my_ellipse
+from ..helperfunctions.helperfunctions import plot_images_with_annotations
+from ..helperfunctions.helperfunctions import construct_mask_from_ellipse
+from ..helperfunctions.helperfunctions import fix_ellipse_axis_angle
+from ..helperfunctions.helperfunctions import my_ellipse
 
-from extern.pytorch_revgrad.src.module import RevGrad
-from extern.squeeze_and_excitation.squeeze_and_excitation.squeeze_and_excitation import ChannelSpatialSELayer
+from ..extern.pytorch_revgrad.src.module import RevGrad
+from ..extern.squeeze_and_excitation.squeeze_and_excitation.squeeze_and_excitation import ChannelSpatialSELayer
 
 
 def getSizes(chz, growth, blks=4):

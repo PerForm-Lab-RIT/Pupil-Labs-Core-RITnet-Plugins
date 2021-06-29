@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from typing import Optional
 from sklearn import metrics
 
-from extern.FilterResponseNormalizationLayer.frn import FRN, TLU
+from ..extern.FilterResponseNormalizationLayer.frn import FRN, TLU
 
 
 def concat_list_of_data_dicts(list_dicts):

@@ -18,15 +18,15 @@ import random
 import numpy as np
 import scipy.io as scio
 
-from helperfunctions.data_augment import augment, flip
+from ..helperfunctions.data_augment import augment, flip
 from torch.utils.data import Dataset
 
-from helperfunctions.helperfunctions import simple_string, one_hot2dist
-from helperfunctions.helperfunctions import pad_to_shape, get_ellipse_info
-from helperfunctions.helperfunctions import extract_datasets, scale_by_ratio
-from helperfunctions.helperfunctions import fix_ellipse_axis_angle, dummy_data
+from ..helperfunctions.helperfunctions import simple_string, one_hot2dist
+from ..helperfunctions.helperfunctions import pad_to_shape, get_ellipse_info
+from ..helperfunctions.helperfunctions import extract_datasets, scale_by_ratio
+from ..helperfunctions.helperfunctions import fix_ellipse_axis_angle, dummy_data
 
-from helperfunctions.utils import normPts
+from ..helperfunctions.utils import normPts
 
 from sklearn.model_selection import StratifiedKFold, train_test_split
 

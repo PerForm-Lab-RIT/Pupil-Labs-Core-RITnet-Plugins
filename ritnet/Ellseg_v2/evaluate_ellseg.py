@@ -18,13 +18,13 @@ from tqdm import tqdm
 from pathlib import Path
 from pprint import pprint
 
-from models_mux import model_dict
+from .models_mux import model_dict
 
-from helperfunctions.loss import get_com
-from helperfunctions.utils import get_predictions
-from helperfunctions.helperfunctions import getValidPoints
-from helperfunctions.helperfunctions import plot_segmap_ellpreds
-from helperfunctions.helperfunctions import ransac, ElliFit, my_ellipse
+from .helperfunctions.loss import get_com
+from .helperfunctions.utils import get_predictions
+from .helperfunctions.helperfunctions import getValidPoints
+from .helperfunctions.helperfunctions import plot_segmap_ellpreds
+from .helperfunctions.helperfunctions import ransac, ElliFit, my_ellipse
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -95,7 +95,7 @@ def preprocess_frame(img, op_shape, align_width=True):
                 # are lesser
                 pad_width = op_shape[0] - img.shape[0]
                 if pad_width%2 == 0:
-                    img = img[-pad_width/2:+pad_width/2, ...]
+                    img = img[-pad_width//2:+pad_width//2, ...]
                 else:
                     img = img[-np.floor(pad_width/2):+np.ceil(pad_width/2), ...]
 
@@ -117,6 +117,60 @@ def preprocess_frame(img, op_shape, align_width=True):
 
     # Return values
     return img, scale_shift
+
+#%% Forward operation on network
+def evaluate_ellseg_on_image_GD(frame, model):
+
+    assert len(frame.shape) == 4, 'Frame must be [1,1,H,W]'
+
+    with torch.no_grad():
+        x4, x3, x2, x1, x = model.enc(frame)
+        latent = torch.mean(x.flatten(start_dim=2), -1)
+        # elOut = model.elReg(x, 0)  # OLD
+        elOut = model.elReg(x)#, 0)  # NEW
+        # seg_out = model.dec(x4, x3, x2, x1, x)  # OLD
+        seg_out = model.dec([x4, x3, x2, x1], x)  # NEW
+    
+    seg_out, elOut, latent = seg_out.cpu(), elOut[0].squeeze().cpu(), latent.squeeze().cpu()
+
+    seg_map = get_predictions(seg_out).squeeze().numpy()
+
+    ellipse_from_output = True
+
+    if ellipse_from_output:
+        # Get ElliFit derived ellipse fits from segmentation mask
+
+        seg_map_temp = copy.deepcopy(seg_map)
+        seg_map_temp[seg_map_temp==2] += 1 # Pupil by PartSeg standard is 3
+        seg_map_temp[seg_map_temp==1] += 1 # Iris by PartSeg standard is 2
+
+        pupilPts, irisPts = getValidPoints(seg_map_temp, isPartSeg=False)
+
+        if np.sum(seg_map_temp == 3) > 50 and type(pupilPts) is not list:
+
+            model_pupil = ElliFit(**{'data': pupilPts})
+
+        else:
+
+            print('Not enough pupil points')
+            return False
+
+        if np.sum(seg_map_temp == 2) > 50 and type(irisPts) is not list:
+
+            model_iris = ElliFit(**{'data': irisPts})
+
+        else:
+            print('Not enough iris points')
+            return False
+
+        pupil_ellipse = np.array(model_pupil.model)
+        iris_ellipse = np.array(model_iris.model)
+
+
+    if (np.sum(pupil_ellipse) == -5):
+        return False
+    else:
+        return seg_map, pupil_ellipse, iris_ellipse, seg_out
 
 #%% Forward operation on network
 def evaluate_ellseg_on_image(frame, model):

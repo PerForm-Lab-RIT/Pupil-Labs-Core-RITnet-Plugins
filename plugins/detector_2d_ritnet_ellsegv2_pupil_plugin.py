@@ -29,9 +29,11 @@ from matplotlib import pyplot as plt
 #from ritnet.Ellseg.pytorchtools import load_from_file
 # NEW ELLSEG
 from ritnet.Ellseg_v2.evaluate_ellseg import parse_args, evaluate_ellseg_on_image_GD, preprocess_frame,rescale_to_original
-from ritnet.Ellseg_v2.modelSummary import model_dict as ellseg_model_dict
-MODEL_DICT_KEY = 'ritnet_v2'
-WEIGHT_LOCATIONS = os.path.join(os.path.dirname(__file__), '..', 'ritnet', 'Ellseg_v2', 'weights', 'all.git_ok')
+from ritnet.Ellseg_v2.models_mux import model_dict as ellseg_model_dict
+from ritnet.Ellseg_v2.args_maker import make_args
+from ritnet.Ellseg_v2.helperfunctions.utils import move_to_single
+MODEL_DICT_KEY = 'DenseElNet'
+WEIGHT_LOCATIONS = os.path.join(os.path.dirname(__file__), '..', 'ritnet', 'Ellseg_v2', 'pretrained', 'pretrained.git_ok')
 
 ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet\\')
 filename = "ellseg_allvsone" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
@@ -89,15 +91,15 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
     uniqueness = "by_class"
     icon_chr = "RE"
 
-    label = "RITnet ellseg_allvsone 2d detector"
-    identifier = "ritnet-ellsegav1-2d"
+    label = "RITnet ellseg_v2 2d detector"
+    identifier = "ritnet-ellseg_v2-2d"
     method = "2d c++"
     order = 0.08
     pupil_detection_plugin = "2d c++"
 
     @property
     def pretty_class_name(self):
-        return "RITnet Detector (ellseg_allvsone)"
+        return "RITnet Detector (ellseg_v2)"
         
     @property
     def pupil_detector(self) -> RITPupilDetector:
@@ -266,9 +268,11 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         else:
             useMultiGPU = False
         
-        model = ellseg_model_dict[MODEL_DICT_KEY]
+        args = make_args().__dict__
+        
+        model = ellseg_model_dict[MODEL_DICT_KEY](args)
         netDict = torch.load(WEIGHT_LOCATIONS)
-        model.load_state_dict(netDict['state_dict'], strict=True)
+        model.load_state_dict(move_to_single(netDict['state_dict']), strict=True)
         model.cuda()
         
         #  Initialize model
@@ -636,7 +640,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         self.menu.label = self.pretty_class_name
         self.menu_icon.label_font = "pupil_icons"
         info = ui.Info_Text(
-            "(PURPLE) Model using EllSeg, the \"allvsone\" model."
+            "(PURPLE) Model using EllSeg, the \"ellseg_v2\" model."
         )
         self.menu.append(info)
         self.menu.append(
