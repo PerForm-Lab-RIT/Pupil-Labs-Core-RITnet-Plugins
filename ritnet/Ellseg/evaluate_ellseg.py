@@ -146,7 +146,7 @@ def evaluate_ellseg_on_image_GD(frame, model):
     if (np.sum(pupil_ellipse) == -5):
         return False
     else:
-        return seg_map, pupil_ellipse, iris_ellipse
+        return seg_map, pupil_ellipse, iris_ellipse, seg_out
 
 
 #%% Forward operation on network
