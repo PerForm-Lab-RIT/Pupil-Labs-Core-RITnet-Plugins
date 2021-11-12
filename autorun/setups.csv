@@ -1,9 +1,0 @@
-RUN_NAME,VIDEO_PATH,PLUGIN,SAVE_EYE0_MASKS,SAVE_EYE1_MASKS,CUSTOM_ELLIPSE,MINIMUM_ELLIPSE_DIAMETER
-Subject 3 Vanilla,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,vanilla,false,false,false,1
-Subject 3 Ellseg No Diameter Minimum,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,ellseg,false,false,false,1
-Subject 3 Ellseg 14 Diameter Minimum,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,ellseg,false,false,false,14
-Subject 3 Ellseg 18 Diameter Minimum,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,ellseg,false,false,false,18
-Subject 3 Ellseg 22 Diameter Minimum,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,ellseg,false,false,false,22
-Subject 3 Ellseg 26 Diameter Minimum,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,ellseg,false,false,false,26
-Subject 3 Ellseg 30 Diameter Minimum,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,ellseg,false,false,false,30
-Subject 3 Ellseg 34 Diameter Minimum,C:\Users\lilba\Documents\COLLEGE\RIT Research\_DATA\018 - P_201218122256_sub3\S001\PupilData\000,ellseg,false,false,false,34

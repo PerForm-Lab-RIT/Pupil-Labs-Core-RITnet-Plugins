@@ -13,6 +13,7 @@ from pupil_detector_plugins.detector_base_plugin import PupilDetectorPlugin
 from pupil_detector_plugins.pye3d_plugin import Pye3DPlugin
 from pupil_detector_plugins.detector_2d_plugin import Detector2DPlugin
 
+from enum import Enum
 import logging
 from methods import normalize
 import torch
@@ -48,6 +49,14 @@ else:
     device=torch.device("cpu")
 
 logger = logging.getLogger(__name__)
+
+
+class EntropyConfidence(Enum):
+    ALWAYS_ON = 1
+    ALL = 2
+    SIMPLE = 3
+    MIN_5 = 4
+
 
 class RITPupilDetector(DetectorBase):
     def __init__(self, model, model_channels):
@@ -286,7 +295,18 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         self.g_pool.ellseg_debug = False
         self.g_pool.save_masks = True if ("--save-masks=0" in sys.argv and self.g_pool.eye_id==0) or ("--save-masks=1" in sys.argv and self.g_pool.eye_id==1) or "--save-masks=both" in sys.argv else False
         self.g_pool.calcCustomConfidence = True
-        self.g_pool.entropy_confidence = True
+        
+        if "--entropy-confidence=always_on" in sys.argv:
+            self.g_pool.entropy_confidence = EntropyConfidence.ALWAYS_ON
+        elif "--entropy-confidence=simple" in sys.argv:
+            self.g_pool.entropy_confidence = EntropyConfidence.SIMPLE
+        elif "--entropy-confidence=all" in sys.argv:
+            self.g_pool.entropy_confidence = EntropyConfidence.ALL
+        elif "--entropy-confidence=min_5" in sys.argv:
+            self.g_pool.entropy_confidence = EntropyConfidence.MIN_5
+        else:
+            self.g_pool.entropy_confidence = None
+            
         self.detector_ritnet_2d = RITPupilDetector(model, 4)
 
     def _stop_other_pupil_detectors(self):
@@ -425,28 +445,33 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                     final_result['confidence'] = self.calcConfidence(pl_pupil_ellipse, seg_map, debug_confidence_timestamp=None)
                 if np.isnan(final_result['confidence']):
                     final_result['confidence'] = 0.0
-                elif self.g_pool.entropy_confidence:
+                elif self.g_pool.entropy_confidence is not None:
                     self.ellipse_true_support_min_dist = 5  # be a LOT more strict since we're working with tight edges
                     # Modify confidence based on entropy
-                    SIMPLE_CONF = False
-                    
-                    if SIMPLE_CONF:
-                        test_conf = (-np.tan(np.mean(pupil_entropy_mask))/np.tan(1)) + 1
-                        final_result['confidence']
-                    else:
-                        #final_result['confidence'] = test_conf
-                        #print(test_conf)
+                    if self.g_pool.entropy_confidence == EntropyConfidence.ALWAYS_ON:
+                        final_result['confidence'] = 0.99
+                    elif self.g_pool.entropy_confidence == EntropyConfidence.ALL:
+                        # Standard Pupil Labs Confidence
+                        standard_conf = final_result['confidence']
                         
+                        # Simple (mean-based) Entropy Confidence
+                        simple_entropy_conf = np.power(np.mean(pupil_entropy_mask) - 1, 100)
+                        
+                        # Pupil Labs w/ Entropy Modification Confidence
+                        entropy_edges = self.calcFinalEntropyEdges(pupil_entropy_mask)
+                        entropy_conf = self.calcConfidence(pl_pupil_ellipse, seg_map, debug_confidence_timestamp=None, final_edges=entropy_edges) if len(entropy_edges) else 0.0
+                        
+                        # Final Confidence
+                        final_result['confidence'] = np.min([standard_conf, simple_entropy_conf, entropy_conf])
+                        print(final_result['confidence'])
+                    elif self.g_pool.entropy_confidence == EntropyConfidence.SIMPLE:
+                        #test_conf = (-np.tan(np.mean(pupil_entropy_mask))/np.tan(1)) + 1
+                        test_conf = np.power(np.mean(pupil_entropy_mask) - 1, 100)
+                        final_result['confidence'] = test_conf
+                    elif self.g_pool.entropy_confidence == EntropyConfidence.MIN_5:
                         thresh = np.max(pupil_entropy_mask)
                         pupil_entropy_mask = (pupil_entropy_mask - np.min(pupil_entropy_mask)) / (np.max(pupil_entropy_mask) - np.min(pupil_entropy_mask))
-                        #hist, bins = np.histogram(pupil_entropy_mask[pupil_entropy_mask > 0].flatten(), np.linspace(0,1,20))
-                        #print("---------------")
-                        #print(hist)
-                        #print(bins)
-                        #print("---------------")
                         thresh = np.mean(pupil_entropy_mask[pupil_entropy_mask > 0])
-                        #print("THRESH: ",thresh)
-                        #print("ZEROS:  ",len(pupil_entropy_mask[pupil_entropy_mask == 0]))
                         entropy_edges = pupil_entropy_mask
                         entropy_edges[pupil_entropy_mask >= thresh] = 1
                         entropy_edges[pupil_entropy_mask < thresh] = 0
@@ -460,10 +485,8 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                         entropy_edges_temp[entropy_edges_temp != 0] = 255
                         cv2.imshow('EYE'+str(eye_id)+' ENTROPY DIFF', entropy_edges_temp)
 
-                        
                         entropy_edges = np.uint8(entropy_edges)
                         entropy_edges[entropy_edges != 0] = 255
-                        #entropy_edges = np.uint8(np.round(np.power(pupil_entropy_mask, 1/3.5))*255)
                         
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         orgPP = (10, 15)
@@ -487,7 +510,6 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                             cv2.imshow('EYE'+str(eye_id)+' ENTROPY', entropy_edges)  # This "edge detector" is elliptical in all good frames and not elliptical in all bad frames
                         
                         conf_rounded = int(math.ceil(final_result['confidence']*100 / 10.0))*10/100
-                        print(conf_rounded)
                         fname = "{}.png".format(frame.timestamp)
                         imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_entropy/{:0.2f}".format(conf_rounded))
                         os.makedirs(imOutDir, exist_ok=True)
@@ -508,8 +530,29 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                         cv2.imwrite('{}/{}'.format(imOutDir, fname), final_entropy_out)
                 
             if self.g_pool.save_masks:
+                # save mask
                 fname = "eye-{}_{:0.3f}_{}.png".format(eye_id, final_result['confidence'], frame.timestamp)
                 self.saveMaskAsImage(img, seg_map, pl_pupil_ellipse, fileName=fname, flipImage=self.g_pool.ellseg_reverse)
+                
+                # save ellipse overlay
+                fname = "eye-{}_{:0.3f}_{}.png".format(eye_id, final_result['confidence'], frame.timestamp)
+                hstack_mask_imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_mask_with_frame")
+                os.makedirs(hstack_mask_imOutDir, exist_ok=True)
+                
+                hstack_mask_out_left = np.stack((np.copy(img),)*3, axis=-1)
+                
+                hstack_seg_map_right = np.stack((np.copy(img),)*3, axis=-1)
+                final_result_ellipse = final_result["ellipse"]
+                elcenter = final_result_ellipse["center"]
+                elaxes = final_result_ellipse["axes"] # axis diameters
+                cv2.ellipse(hstack_seg_map_right,
+                    (round(elcenter[0]), round(elcenter[1])),
+                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
+                    final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
+                    
+                hstack_mask_out = cv2.hconcat([hstack_mask_out_left, hstack_seg_map_right])
+                
+                cv2.imwrite('{}/{}'.format(hstack_mask_imOutDir, fname), hstack_mask_out)
             
             if final_result['diameter'] < self.g_pool.ellseg_pupil_size_min:
                 # write out image
@@ -624,6 +667,24 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                 result["diameter"] = 0.0
                 result["location"] = (0.0, 0.0)
                 result['confidence'] = 0.0
+            
+            if self.g_pool.save_masks:
+                # save ellipse overlay
+                fname = "eye-{}_{:0.3f}_{}.png".format(eye_id, final_result['confidence'], frame.timestamp)
+                hstack_mask_imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_mask_with_frame")
+                os.makedirs(hstack_mask_imOutDir, exist_ok=True)
+                
+                hstack_mask_out_left = np.stack((np.copy(img),)*3, axis=-1)
+                
+                hstack_seg_map_right = np.stack((np.copy(img),)*3, axis=-1)
+                cv2.ellipse(hstack_seg_map_right,
+                    (round(ellseg_pupil_ellipse[0]), round(ellseg_pupil_ellipse[1])),
+                    (round(ellseg_pupil_ellipse[2]), round(ellseg_pupil_ellipse[3])),
+                    ellseg_pupil_ellipse[4], 0, 360, (255, 0, 0), 1)
+                
+                hstack_mask_out = cv2.hconcat([hstack_mask_out_left, hstack_seg_map_right])
+                
+                cv2.imwrite('{}/{}'.format(hstack_mask_imOutDir, fname), hstack_mask_out)
             
             return result
 

@@ -1,0 +1,120 @@
+<html>
+<head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.16.1/vis.css" type="text/css" />
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.16.1/vis-network.min.js"> </script>
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+
+<style type="text/css">
+
+        #mynetwork {
+            width: 500px;
+            height: 500px;
+            background-color: #ffffff;
+            border: 1px solid lightgray;
+            position: relative;
+            float: left;
+        }
+
+        
+
+        
+        #config {
+            float: left;
+            width: 400px;
+            height: 600px;
+        }
+        
+
+        
+</style>
+
+</head>
+
+<body>
+<div id = "mynetwork"></div>
+
+
+<div id = "config"></div>
+
+<script type="text/javascript">
+
+    // initialize global variables.
+    var edges;
+    var nodes;
+    var network; 
+    var container;
+    var options, data;
+
+    
+    // This method is responsible for drawing the graph, returns the drawn network
+    function drawGraph() {
+        var container = document.getElementById('mynetwork');
+        
+        
+
+        // parsing and collecting nodes and edges from the python
+        nodes = new vis.DataSet([{"id": "OpenEDS", "label": "OpenEDS", "shape": "dot"}, {"id": "NVGaze", "label": "NVGaze", "shape": "dot"}, {"id": "UnityEyes", "label": "UnityEyes", "shape": "dot"}, {"id": "riteyes-s-general", "label": "riteyes-s-general", "shape": "dot"}, {"id": "riteyes-s-natural", "label": "riteyes-s-natural", "shape": "dot"}, {"id": "LPW", "label": "LPW", "shape": "dot"}, {"id": "Santini", "label": "Santini", "shape": "dot"}, {"id": "Fuhl", "label": "Fuhl", "shape": "dot"}, {"id": "Swirski", "label": "Swirski", "shape": "dot"}]);
+        edges = new vis.DataSet([{"arrows": "to", "from": "OpenEDS", "to": "NVGaze", "value": 0.9630604076676684}, {"arrows": "to", "from": "OpenEDS", "to": "UnityEyes", "value": 0.5673311890030385}, {"arrows": "to", "from": "OpenEDS", "to": "riteyes-s-general", "value": 0.7528386153720821}, {"arrows": "to", "from": "OpenEDS", "to": "riteyes-s-natural", "value": 0.6679457659018792}, {"arrows": "to", "from": "OpenEDS", "to": "LPW", "value": 0.8726391434476318}, {"arrows": "to", "from": "OpenEDS", "to": "Santini", "value": 0.555174190258391}, {"arrows": "to", "from": "OpenEDS", "to": "Fuhl", "value": 0.41758991021550634}, {"arrows": "to", "from": "OpenEDS", "to": "Swirski", "value": 0.777807477197823}, {"arrows": "to", "from": "NVGaze", "to": "OpenEDS", "value": 0.7098076934852706}, {"arrows": "to", "from": "NVGaze", "to": "UnityEyes", "value": 0.06575791251273327}, {"arrows": "to", "from": "NVGaze", "to": "riteyes-s-general", "value": 0.19507935567718493}, {"arrows": "to", "from": "NVGaze", "to": "riteyes-s-natural", "value": 0.3008700496734486}, {"arrows": "to", "from": "NVGaze", "to": "LPW", "value": 0.24841754016449788}, {"arrows": "to", "from": "NVGaze", "to": "Santini", "value": 0.0}, {"arrows": "to", "from": "NVGaze", "to": "Fuhl", "value": 0.10828078299543292}, {"arrows": "to", "from": "NVGaze", "to": "Swirski", "value": 0.5518406893233315}, {"arrows": "to", "from": "UnityEyes", "to": "OpenEDS", "value": 0.13621701458551289}, {"arrows": "to", "from": "UnityEyes", "to": "NVGaze", "value": 0.18776565328855174}, {"arrows": "to", "from": "UnityEyes", "to": "riteyes-s-general", "value": 0.6525772204471781}, {"arrows": "to", "from": "UnityEyes", "to": "riteyes-s-natural", "value": 0.32202166605486826}, {"arrows": "to", "from": "UnityEyes", "to": "LPW", "value": 0.8892475325465866}, {"arrows": "to", "from": "UnityEyes", "to": "Santini", "value": 0.8334278077003215}, {"arrows": "to", "from": "UnityEyes", "to": "Fuhl", "value": 0.24205501719977665}, {"arrows": "to", "from": "UnityEyes", "to": "Swirski", "value": 0.6350898286921776}, {"arrows": "to", "from": "riteyes-s-general", "to": "OpenEDS", "value": 0.8243220727886152}, {"arrows": "to", "from": "riteyes-s-general", "to": "NVGaze", "value": 0.442790579629824}, {"arrows": "to", "from": "riteyes-s-general", "to": "UnityEyes", "value": 0.09253662340514969}, {"arrows": "to", "from": "riteyes-s-general", "to": "riteyes-s-natural", "value": 0.37959382990484447}, {"arrows": "to", "from": "riteyes-s-general", "to": "LPW", "value": 0.42253172730537747}, {"arrows": "to", "from": "riteyes-s-general", "to": "Santini", "value": 0.8179385184500838}, {"arrows": "to", "from": "riteyes-s-general", "to": "Fuhl", "value": 0.7348729091766106}, {"arrows": "to", "from": "riteyes-s-general", "to": "Swirski", "value": 0.3638397333655653}, {"arrows": "to", "from": "riteyes-s-natural", "to": "OpenEDS", "value": 0.170360568702973}, {"arrows": "to", "from": "riteyes-s-natural", "to": "NVGaze", "value": 0.15939062539485632}, {"arrows": "to", "from": "riteyes-s-natural", "to": "UnityEyes", "value": 0.6445189743667011}, {"arrows": "to", "from": "riteyes-s-natural", "to": "riteyes-s-general", "value": 0.21615695220345857}, {"arrows": "to", "from": "riteyes-s-natural", "to": "LPW", "value": 0.5060193893825686}, {"arrows": "to", "from": "riteyes-s-natural", "to": "Santini", "value": 0.8435145372033749}, {"arrows": "to", "from": "riteyes-s-natural", "to": "Fuhl", "value": 0.48669800376087313}, {"arrows": "to", "from": "riteyes-s-natural", "to": "Swirski", "value": 0.6413945300867748}, {"arrows": "to", "from": "LPW", "to": "OpenEDS", "value": 0.46481708181667564}, {"arrows": "to", "from": "LPW", "to": "NVGaze", "value": 0.9222800771540202}, {"arrows": "to", "from": "LPW", "to": "UnityEyes", "value": 0.14066254982491963}, {"arrows": "to", "from": "LPW", "to": "riteyes-s-general", "value": 0.7345839008545935}, {"arrows": "to", "from": "LPW", "to": "riteyes-s-natural", "value": 0.7908006139826722}, {"arrows": "to", "from": "LPW", "to": "Santini", "value": 0.3076135483832307}, {"arrows": "to", "from": "LPW", "to": "Fuhl", "value": 0.27815848130159543}, {"arrows": "to", "from": "LPW", "to": "Swirski", "value": 0.7309047745972911}, {"arrows": "to", "from": "Santini", "to": "OpenEDS", "value": 0.8121333756360387}, {"arrows": "to", "from": "Santini", "to": "NVGaze", "value": 0.15610293795707383}, {"arrows": "to", "from": "Santini", "to": "UnityEyes", "value": 0.5381151515795407}, {"arrows": "to", "from": "Santini", "to": "riteyes-s-general", "value": 0.9842035067704403}, {"arrows": "to", "from": "Santini", "to": "riteyes-s-natural", "value": 0.26132178867633793}, {"arrows": "to", "from": "Santini", "to": "LPW", "value": 0.698696779466886}, {"arrows": "to", "from": "Santini", "to": "Fuhl", "value": 0.7291973159857771}, {"arrows": "to", "from": "Santini", "to": "Swirski", "value": 0.22615154385553898}, {"arrows": "to", "from": "Fuhl", "to": "OpenEDS", "value": 0.20842970177229664}, {"arrows": "to", "from": "Fuhl", "to": "NVGaze", "value": 0.5783647531675191}, {"arrows": "to", "from": "Fuhl", "to": "UnityEyes", "value": 0.8351919007355441}, {"arrows": "to", "from": "Fuhl", "to": "riteyes-s-general", "value": 0.7666173695488251}, {"arrows": "to", "from": "Fuhl", "to": "riteyes-s-natural", "value": 0.3188867367888125}, {"arrows": "to", "from": "Fuhl", "to": "LPW", "value": 0.27711838912000447}, {"arrows": "to", "from": "Fuhl", "to": "Santini", "value": 0.9384053869588573}, {"arrows": "to", "from": "Fuhl", "to": "Swirski", "value": 0.6807421487999566}, {"arrows": "to", "from": "Swirski", "to": "OpenEDS", "value": 0.4784636882520589}, {"arrows": "to", "from": "Swirski", "to": "NVGaze", "value": 0.5921758864438046}, {"arrows": "to", "from": "Swirski", "to": "UnityEyes", "value": 0.8176835313817685}, {"arrows": "to", "from": "Swirski", "to": "riteyes-s-general", "value": 0.6649759472549218}, {"arrows": "to", "from": "Swirski", "to": "riteyes-s-natural", "value": 0.41059269489705724}, {"arrows": "to", "from": "Swirski", "to": "LPW", "value": 0.03677089209632496}, {"arrows": "to", "from": "Swirski", "to": "Santini", "value": 0.4502894474144415}, {"arrows": "to", "from": "Swirski", "to": "Fuhl", "value": 0.48031152039136993}]);
+
+        // adding nodes and edges to the graph
+        data = {nodes: nodes, edges: edges};
+
+        var options = {
+    "configure": {
+        "enabled": true
+    },
+    "edges": {
+        "color": {
+            "inherit": true
+        },
+        "smooth": {
+            "enabled": false,
+            "type": "continuous"
+        }
+    },
+    "interaction": {
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+    },
+    "physics": {
+        "enabled": true,
+        "stabilization": {
+            "enabled": true,
+            "fit": true,
+            "iterations": 1000,
+            "onlyDynamicEdges": false,
+            "updateInterval": 50
+        }
+    }
+};
+        
+        
+
+        
+        // if this network requires displaying the configure window,
+        // put it in its div
+        options.configure["container"] = document.getElementById("config");
+        
+
+        network = new vis.Network(container, data, options);
+	 
+        
+
+
+        
+
+        return network;
+
+    }
+
+    drawGraph();
+
+</script>
+</body>
+</html>
