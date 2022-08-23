@@ -95,9 +95,9 @@ def get_mask_from_cv2_image(image, model, useGpu=True, pupilOnly=False, includeR
         img = image.unsqueeze(1)
         data = img.to(device)   
         output = model(data)
+        bs, c, h, w = output.size()
         rawpredict = get_predictions(output)
         predict = rawpredict + 1
-        # print(np.unique(predict[0].cpu().numpy()))
         pred_img = 1 - predict[0].cpu().numpy()/channels
     else:
         img = np.array(Image.fromarray(image).convert("L"))

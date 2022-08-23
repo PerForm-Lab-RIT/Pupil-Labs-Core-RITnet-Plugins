@@ -77,10 +77,10 @@ class Detector2DRITnetPupilPlugin(Detector2DPlugin):
     def __init__(
         self,
         g_pool=None,
-        # properties=None,
+        properties=None,
         # detector_2d: Detector2D = None,
     ):
-        super().__init__(g_pool=g_pool)
+        super().__init__(g_pool=g_pool, properties=properties)
         
         #  Set up RITnet
         if torch.cuda.device_count() > 1:

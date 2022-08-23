@@ -103,7 +103,7 @@ class RITPupilDetector(DetectorBase):
             return None
 
 
-class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
+class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
     uniqueness = "by_class"
     icon_chr = "RE"
 
@@ -297,10 +297,10 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
     def __init__(
         self,
         g_pool=None,
-        # properties=None,
+        properties=None,
         # detector_2d: Detector2D = None,
     ):
-        super().__init__(g_pool=g_pool)
+        super().__init__(g_pool=g_pool, properties=properties)
         #  Set up RITnet
         if torch.cuda.device_count() > 1:
             print('Moving to a multiGPU setup for Ellseg.')
@@ -331,7 +331,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
         self.g_pool.save_masks = True if ("--save-masks=0" in sys.argv and self.g_pool.eye_id==0) or ("--save-masks=1" in sys.argv and self.g_pool.eye_id==1) or "--save-masks=both" in sys.argv else False
-        self.g_pool.calcCustomConfidence = True
+        self.g_pool.calcCustomConfidence = True if "--custom-confidence" in sys.argv else False
         
         if "--entropy-confidence=always_on" in sys.argv:
             self.g_pool.entropy_confidence = EntropyConfidence.ALWAYS_ON
@@ -397,7 +397,7 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
             cv2.destroyWindow('EYE'+str(eye_id)+' INPUT')
 
         customEllipse = self.g_pool.ellseg_customellipse
-
+        
         values = self.detector_ritnet_2d.detect(img)
 
         if not values:
@@ -406,7 +406,15 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         # Ellseg results are obtained - begin obtaining or returning final ellipse
         seg_map = values[0]
         origSeg_map = np.copy(seg_map)
-        
+        yellow_mask = np.zeros((origSeg_map.shape[0], origSeg_map.shape[1], 3))
+        yellow_mask[:,:,2][origSeg_map == 2] = 128
+        yellow_mask[:,:,1][origSeg_map == 2] = 128
+        if self.g_pool.eye_id == 1:
+            yellow_mask = np.flipud(yellow_mask)
+        alpha = 0.25
+        beta = 1.0 - alpha
+        final_bgr = cv2.addWeighted(yellow_mask.astype(np.uint8), alpha, frame.bgr.astype(np.uint8), beta, 0.0)
+        frame.bgr = final_bgr
         
         ellseg_pupil_ellipse = values[1]
         #iris_ellipse = values[2]
@@ -426,8 +434,6 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
         seg_entropy_mask = np.divide(seg_entropy, np.log2(CHANNELS))
         pupil_entropy_mask = seg_entropy_mask
         pupil_entropy_mask[seg_map != 2] = 0
-        
-        origSeg_map = np.copy(seg_map)
 
         # OPTION 1: If custom ellipse setting is NOT toggled on
         if not customEllipse:
@@ -448,6 +454,59 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
 
             ## Apply pupil labs ellipse fit to mask
             final_result = super().detect(framedup)
+            """
+            final_result_normalim = super().detect(frame)
+            
+            translational_diff = (((final_result_normalim["ellipse"]["center"][0]**2 + final_result_normalim["ellipse"]["center"][1]**2)**0.5 -
+                (final_result["ellipse"]["center"][0]**2 + final_result["ellipse"]["center"][1]**2)**0.5)**2)**0.5
+            
+            if final_result_normalim['confidence'] > 0.0 and translational_diff > 5.0:
+                
+                final_result_ellipse = final_result["ellipse"]
+                elcenter = final_result_ellipse["center"]
+                elaxes = final_result_ellipse["axes"] # axis diameters
+                
+                normal_final_result_ellipse = final_result_normalim["ellipse"]
+                normal_elcenter = normal_final_result_ellipse["center"]
+                normal_elaxes = normal_final_result_ellipse["axes"] # axis diameters
+                
+                seg_map_debug = np.stack((np.copy(img),)*3, axis=-1)
+                cv2.ellipse(seg_map_debug,
+                    (round(elcenter[0]), round(elcenter[1])),
+                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
+                    final_result_ellipse["angle"], 0, 360, (0, 0, 255), 1)
+                    
+                normal_map_debug = np.stack((np.copy(img),)*3, axis=-1)
+                cv2.ellipse(normal_map_debug,
+                    (round(normal_elcenter[0]), round(normal_elcenter[1])),
+                    (round(normal_elaxes[0]/2), round(normal_elaxes[1]/2)), # convert diameters to radii
+                    normal_final_result_ellipse["angle"], 0, 360, (255, 128, 0), 1)
+                
+                both_map_debug = np.stack((np.copy(img),)*3, axis=-1)
+                cv2.ellipse(both_map_debug,
+                    (round(elcenter[0]), round(elcenter[1])),
+                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
+                    final_result_ellipse["angle"], 0, 360, (0, 0, 255), 1)
+                cv2.ellipse(both_map_debug,
+                    (round(normal_elcenter[0]), round(normal_elcenter[1])),
+                    (round(normal_elaxes[0]/2), round(normal_elaxes[1]/2)), # convert diameters to radii
+                    normal_final_result_ellipse["angle"], 0, 360, (255, 128, 0), 1)
+                
+                seg_map_debug = cv2.putText(seg_map_debug, "Through EllSeg", (10, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (255, 255, 255), 3, cv2.LINE_AA)
+                seg_map_debug = cv2.putText(seg_map_debug, "Through EllSeg", (10, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (0, 0, 255), 2, cv2.LINE_AA)
+                
+                normal_map_debug = cv2.putText(normal_map_debug, "Normal Input", (15, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (255, 255, 255), 3, cv2.LINE_AA)
+                normal_map_debug = cv2.putText(normal_map_debug, "Normal Input", (15, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (255, 128, 0), 2, cv2.LINE_AA)
+                
+                out = np.concatenate([normal_map_debug, seg_map_debug], axis=1)
+                cv2.imshow('comparison', out)
+                cv2.waitKey(0)
+                imOutDir = os.path.join(".")
+                
+                fname = 'out.jpg'
+                cv2.imwrite('{}/{}'.format(imOutDir, fname), out)
+                exit()
+            """
             if self.g_pool.ellseg_debug:
 
                 final_result_ellipse = final_result["ellipse"]
@@ -567,25 +626,26 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                                         color, thickness, cv2.LINE_AA)
                             cv2.imshow('EYE'+str(eye_id)+' ENTROPY', entropy_edges)  # This "edge detector" is elliptical in all good frames and not elliptical in all bad frames
                         
-                        conf_rounded = int(math.ceil(final_result['confidence']*100 / 10.0))*10/100
-                        fname = "{}.png".format(frame.timestamp)
-                        imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_entropy/{:0.2f}".format(conf_rounded))
-                        os.makedirs(imOutDir, exist_ok=True)
-                        
-                        final_result_ellipse = final_result["ellipse"]
-                        elcenter = (final_result_ellipse["center"][0], frame.height - final_result_ellipse["center"][1]) if self.g_pool.ellseg_reverse else final_result_ellipse["center"]
-                        elaxes = final_result_ellipse["axes"] # axis diameters
-                        elangle = 180 - final_result_ellipse["angle"] if self.g_pool.ellseg_reverse else final_result_ellipse["angle"]
-                        
-                        img_with_ellipse = np.stack((np.copy(img),)*3, axis=-1)
+                        if self.g_pool.save_masks:
+                            conf_rounded = int(math.ceil(final_result['confidence']*100 / 10.0))*10/100
+                            fname = "{}.png".format(frame.timestamp)
+                            imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_entropy/{:0.2f}".format(conf_rounded))
+                            os.makedirs(imOutDir, exist_ok=True)
+                            
+                            final_result_ellipse = final_result["ellipse"]
+                            elcenter = (final_result_ellipse["center"][0], frame.height - final_result_ellipse["center"][1]) if self.g_pool.ellseg_reverse else final_result_ellipse["center"]
+                            elaxes = final_result_ellipse["axes"] # axis diameters
+                            elangle = 180 - final_result_ellipse["angle"] if self.g_pool.ellseg_reverse else final_result_ellipse["angle"]
+                            
+                            img_with_ellipse = np.stack((np.copy(img),)*3, axis=-1)
 
-                        cv2.ellipse(img_with_ellipse,
-                            (round(elcenter[0]), round(elcenter[1])),
-                            (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
-                            final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
-                        
-                        final_entropy_out = cv2.hconcat([img_with_ellipse, np.stack((np.copy(entropy_edges),)*3, axis=-1)])
-                        cv2.imwrite('{}/{}'.format(imOutDir, fname), final_entropy_out)
+                            cv2.ellipse(img_with_ellipse,
+                                (round(elcenter[0]), round(elcenter[1])),
+                                (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
+                                final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
+                            
+                            final_entropy_out = cv2.hconcat([img_with_ellipse, np.stack((np.copy(entropy_edges),)*3, axis=-1)])
+                            cv2.imwrite('{}/{}'.format(imOutDir, fname), final_entropy_out)
                 
             if self.g_pool.save_masks:
                 # save mask
@@ -613,23 +673,24 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                 cv2.imwrite('{}/{}'.format(hstack_mask_imOutDir, fname), hstack_mask_out)
                 
             if final_result['diameter'] < self.g_pool.ellseg_pupil_size_min:
-                # write out image
-                imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_eliminated_frame")
-                os.makedirs(imOutDir, exist_ok=True)
-                im = np.zeros((frame.height, frame.width, 3))
-                im[:, :, 0] = img
-                im[:, :, 1] = img
-                im[:, :, 2] = img
-                final_result_ellipse = final_result["ellipse"]
-                elcenter = final_result_ellipse["center"]
-                elaxes = final_result_ellipse["axes"] # axis diameters
-                cv2.ellipse(im,
-                    (round(elcenter[0]), round(elcenter[1])),
-                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
-                    final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
-                fileName = "eye-{}_{:0.3f}_{}.png".format(self.g_pool.eye_id, final_result['confidence'], frame.timestamp)
-                cv2.imwrite("{}/{}".format(imOutDir, fileName), im)
-                # end write out image
+                if self.g_pool.save_masks:
+                    # write out image
+                    imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_eliminated_frame")
+                    os.makedirs(imOutDir, exist_ok=True)
+                    im = np.zeros((frame.height, frame.width, 3))
+                    im[:, :, 0] = img
+                    im[:, :, 1] = img
+                    im[:, :, 2] = img
+                    final_result_ellipse = final_result["ellipse"]
+                    elcenter = final_result_ellipse["center"]
+                    elaxes = final_result_ellipse["axes"] # axis diameters
+                    cv2.ellipse(im,
+                        (round(elcenter[0]), round(elcenter[1])),
+                        (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
+                        final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
+                    fileName = "eye-{}_{:0.3f}_{}.png".format(self.g_pool.eye_id, final_result['confidence'], frame.timestamp)
+                    cv2.imwrite("{}/{}".format(imOutDir, fileName), im)
+                    # end write out image
                 final_result["ellipse"] = {"center": (0.0, 0.0), "axes": (0.0, 0.0), "angle": 0.0}
                 final_result["diameter"] = 0.0
                 final_result["location"] = (0.0, 0.0)
@@ -706,23 +767,24 @@ class Detector2DRITnetEllsegAllvonePlugin(Detector2DPlugin):
                 self.g_pool.ellSegDetector = {str(self.g_pool.eye_id): result}
             
             if result['diameter'] < self.g_pool.ellseg_pupil_size_min:
-                # write out image
-                imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_eliminated_frame")
-                os.makedirs(imOutDir, exist_ok=True)
-                im = np.zeros((frame.height, frame.width, 3))
-                im[:, :, 0] = img
-                im[:, :, 1] = img
-                im[:, :, 2] = img
-                final_result_ellipse = result["ellipse"]
-                elcenter = final_result_ellipse["center"]
-                elaxes = final_result_ellipse["axes"] # axis diameters
-                cv2.ellipse(im,
-                    (round(elcenter[0]), round(elcenter[1])),
-                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
-                    final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
-                fileName = "eye-{}_{:0.3f}_{}.png".format(self.g_pool.eye_id, result['confidence'], frame.timestamp)
-                cv2.imwrite("{}/{}".format(imOutDir, fileName), im)
-                # end write out image
+                if self.g_pool.save_masks:
+                    # write out image
+                    imOutDir = os.path.join(self.g_pool.capture.source_path[0:self.g_pool.capture.source_path.rindex("\\")+1], "eye"+str(self.g_pool.eye_id)+"_eliminated_frame")
+                    os.makedirs(imOutDir, exist_ok=True)
+                    im = np.zeros((frame.height, frame.width, 3))
+                    im[:, :, 0] = img
+                    im[:, :, 1] = img
+                    im[:, :, 2] = img
+                    final_result_ellipse = result["ellipse"]
+                    elcenter = final_result_ellipse["center"]
+                    elaxes = final_result_ellipse["axes"] # axis diameters
+                    cv2.ellipse(im,
+                        (round(elcenter[0]), round(elcenter[1])),
+                        (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
+                        final_result_ellipse["angle"], 0, 360, (255, 0, 0), 1)
+                    fileName = "eye-{}_{:0.3f}_{}.png".format(self.g_pool.eye_id, result['confidence'], frame.timestamp)
+                    cv2.imwrite("{}/{}".format(imOutDir, fileName), im)
+                    # end write out image
                 result["ellipse"] = {"center": (0.0, 0.0), "axes": (0.0, 0.0), "angle": 0.0}
                 result["diameter"] = 0.0
                 result["location"] = (0.0, 0.0)
