@@ -394,7 +394,10 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
             debugOutputWindowName = 'EYE'+str(eye_id)+' OUTPUT'
 
         else:
-            cv2.destroyWindow('EYE'+str(eye_id)+' INPUT')
+            try:
+                cv2.destroyWindow('EYE'+str(eye_id)+' INPUT')
+            except Exception as _:
+                pass
 
         customEllipse = self.g_pool.ellseg_customellipse
         
