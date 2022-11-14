@@ -299,6 +299,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         g_pool=None,
         properties=None,
         # detector_2d: Detector2D = None,
+        help_thresh=0.85
     ):
         super().__init__(g_pool=g_pool, properties=properties)
         #  Set up RITnet
@@ -349,6 +350,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         self.entropy_count = 0
         
         self.detector_ritnet_2d = RITPupilDetector(model, 4)
+        self.help_thresh = help_thresh
 
     def _stop_other_pupil_detectors(self):
         plugin_list = self.g_pool.plugins
@@ -366,6 +368,11 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         if not self.isAlone:
             self._stop_other_pupil_detectors()
             self.isAlone = True
+        
+        # ---------- Abandon early if PL Vanilla does good ----------
+        #initial_result = super().detect(frame)
+        #if initial_result['confidence'] >= self.help_thresh:
+        #    return initial_result
 
         result = {}
         ellipse = {}
