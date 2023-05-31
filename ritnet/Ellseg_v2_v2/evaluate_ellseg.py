@@ -111,7 +111,10 @@ def preprocess_frame(img, op_shape, align_width=True):
         sys.exit('Height alignment not implemented! Exiting ...')
 
     # Normalize the image to Z scores
-    img = (img - img.mean())/img.std()
+    if img.std() != 0.0:
+        img = (img - img.mean())/img.std()
+    else:
+        img = (img - img.mean())
 
     # Add a dummy color channel
     img = torch.from_numpy(img).to(torch.float32)

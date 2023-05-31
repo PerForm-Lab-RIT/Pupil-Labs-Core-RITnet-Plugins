@@ -28,7 +28,7 @@ from ritnet.Ellseg.pytorchtools import load_from_file
 from cv2 import imshow
 import cv2
 
-ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet\\')
+ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet/')
 filename = "ritnet_400400.pkl" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
 MODEL_DICT_STR, CHANNELS, IS_ELLSEG, ELLSEG_MODEL = model_channel_dict[filename]
 ELLSEG_PRECISION = 0

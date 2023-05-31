@@ -28,7 +28,7 @@ from ritnet.models import model_dict, model_channel_dict
 from cv2 import imshow
 import cv2
 
-ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet\\')
+ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet/')
 filename = "best_model.pkl" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
 MODEL_DICT_STR, CHANNELS, IS_ELLSEG, ELLSEG_MODEL = model_channel_dict[filename]
 ELLSEG_PRECISION = 0
