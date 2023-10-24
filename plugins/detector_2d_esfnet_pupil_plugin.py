@@ -81,9 +81,15 @@ class RITPupilDetector(DetectorBase):
         self._BDCN_network = BDCN_network
         self._model_channels = model_channels
         self._custom_ellipse = custom_ellipse
+        self._clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8,8))
 
     def detect(self, img):
-        frame_scaled_shifted, scale_shift = preprocess_frame(img, (240, 320), align_width=True)
+        if True:
+            # CLAHE contrast enhancement a-la RITnet
+            frame = self._clahe.apply(img)
+            frame_scaled_shifted, scale_shift = preprocess_frame(frame, (240, 320), align_width=True)
+        else:
+            frame_scaled_shifted, scale_shift = preprocess_frame(img, (240, 320), align_width=True)
         input_tensor = frame_scaled_shifted.unsqueeze(0).to(device)
         out_tuple = evaluate_ellseg_on_image(input_tensor, self._model, self._BDCN_network, device=torch.device("cuda"), get_ellipses=self._custom_ellipse)
         if(out_tuple):

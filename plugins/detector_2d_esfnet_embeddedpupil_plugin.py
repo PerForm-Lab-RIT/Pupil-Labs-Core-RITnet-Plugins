@@ -32,12 +32,24 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 #from ritnet.Ellseg.args import parse_precision
 #from ritnet.Ellseg.pytorchtools import load_from_file
 # NEW ELLSEG
-from ritnet.Ellseg_v2_v2.evaluate_ellseg import parse_args, evaluate_ellseg_on_image, preprocess_frame,rescale_to_original
-from ritnet.Ellseg_v2_v2.models_mux import model_dict as ellseg_model_dict
+#from ritnet.Ellseg_v2_v2.evaluate_ellseg import parse_args, evaluate_ellseg_on_image, preprocess_frame,rescale_to_original
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "ESFnet"))
+from ESFnet.bdcn_new import BDCN
+from ESFnet.evaluate import preprocess_frame, evaluate_ellseg_on_image, rescale_to_original, get_config
+from ESFnet.models.RITnet_v2 import DenseNet2D
+from ESFnet.pytorchtools import load_from_file
+
+#from ritnet.Ellseg_v2_v2.models_mux import model_dict as ellseg_model_dict
 from ritnet.Ellseg_v2_v2.args_maker import make_args
-from ritnet.Ellseg_v2_v2.helperfunctions.utils import move_to_single
-MODEL_DICT_KEY = 'DenseElNet'
-WEIGHT_LOCATIONS = os.path.join(os.path.dirname(__file__), '..', 'ritnet', 'Ellseg_v2_v2', 'pretrained', 'public.git_ok')
+model_file = 'baseline_edge_16.pkl'
+setting_file = 'baseline_edge.yaml'
+edgemodel_file = 'gen_00000016.pt'
+WEIGHT_LOCATIONS = os.path.join(os.path.dirname(__file__), '..', 'ESFnet', 
+    model_file)
+SETTINGS_LOCATION = os.path.join(os.path.dirname(__file__), '..', 'ESFnet', 
+    'configs', setting_file)
+EDGEMODEL_LOCATION = os.path.join(os.path.dirname(__file__), '..', 'ESFnet', 
+    edgemodel_file)
 
 ritnet_directory = os.path.join(os.path.dirname(__file__), '..', 'ritnet\\')
 filename = "ellseg_allvsone" # best_model.pkl, ritnet_pupil.pkl, ritnet_400400.pkl, ellseg_allvsone
@@ -64,9 +76,13 @@ class EntropyConfidence(Enum):
 
 
 class RITPupilDetector(DetectorBase):
-    def __init__(self, model, model_channels):
+    def __init__(self, model, BDCN_network, model_channels, custom_ellipse=False):
         self._model = model
+        self._model.eval()
+        self._BDCN_network = BDCN_network
+        self._BDCN_network.eval()
         self._model_channels = model_channels
+        self._custom_ellipse = custom_ellipse
         self._clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8,8))
 
     def detect(self, img):
@@ -76,53 +92,39 @@ class RITPupilDetector(DetectorBase):
             frame_scaled_shifted, scale_shift = preprocess_frame(frame, (240, 320), align_width=True)
         else:
             frame_scaled_shifted, scale_shift = preprocess_frame(img, (240, 320), align_width=True)
-        
         input_tensor = frame_scaled_shifted.unsqueeze(0).to(device)
-        out_dict = evaluate_ellseg_on_image(input_tensor, self._model)
-
-        if(out_dict):
+        try:
+            out_tuple = evaluate_ellseg_on_image(input_tensor, self._model, self._BDCN_network, device=torch.device("cuda"), get_ellipses=self._custom_ellipse)
+        except AssertionError:  # "Conic form incorrect"
+            return None
+        if(out_tuple):
+            edge_map, seg_map, pupil_ellipse, iris_ellipse = out_tuple
             # Return ellipse predictions back to original dimensions
-            #seg_map, pupil_ellipse, iris_ellipse = rescale_to_original(values[0], values[1], values[2],
-            #                                                           scale_shift, img.shape)
-                    
-            out_dict = rescale_to_original(out_dict,
+            out_dict = rescale_to_original(edge_map, seg_map,
+                                           pupil_ellipse, iris_ellipse,
                                                scale_shift,
                                                img.shape)
-            seg_map, pupil_ellipse, iris_ellipse, seg_out = out_dict['mask'], out_dict['pupil_ellipse'], out_dict['iris_ellipse'], out_dict['predict']
-            
-            # Calculate entropy
-            seg_softmaxed = torch.nn.functional.softmax(seg_out, dim=1).cpu().numpy()[0, :, :, :]
-            seg_entropy = entropy(seg_softmaxed, base=2, axis=0)
-            
-            # Rescale entropy
-            if scale_shift[1] < 0:
-                # Pad background
-                seg_entropy = np.pad(seg_entropy, ((-scale_shift[1]//2, -scale_shift[1]//2), (0, 0)))
-            elif scale_shift[1] > 0:
-                # Remove extra pixels
-                seg_entropy = seg_entropy[scale_shift[1]//2:-scale_shift[1]//2, ...]
-            seg_entropy = cv2.resize(seg_entropy, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
-
+            edge_map, seg_map, pupil_ellipse, iris_ellipse = out_dict
             # Ellseg returns pupil angle in pupil_ellipse[4] as the major axis orientation in radians, clockwise
-            return [seg_map, pupil_ellipse, iris_ellipse, seg_entropy]
+            return [edge_map, seg_map, pupil_ellipse, iris_ellipse]
         else:
             # evaluate_ellseg_on_image_GD will return false on a failure to fit the ellipse
             return None
 
 
-class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
+class Detector2DESFnetEmbeddedPlugin(Detector2DPlugin):
     uniqueness = "by_class"
     icon_chr = "RE"
 
-    label = "RITnet ellseg_v2 2d detector"
-    identifier = "ritnet-ellseg_v2-2d"
+    label = "RITnet ESF-net 2d detector"
+    identifier = "ritnet-esfnet-2d"
     method = "2d c++"
     order = 0.08
     pupil_detection_plugin = "2d c++"
 
     @property
     def pretty_class_name(self):
-        return "RITnet Detector (ellseg_v2)"
+        return "RITnet Detector (ESF-net)"
         
     @property
     def pupil_detector(self) -> RITPupilDetector:
@@ -197,14 +199,19 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
 
     def calcConfidence(self, pupil_ellipse, seg_map, debug_confidence_timestamp=None, final_edges=None):
         
-        if final_edges is None:
+        if final_edges is None or not len(final_edges):
             maskEdges = np.uint8(cv2.Canny(np.uint8(seg_map), 1, 2))
             try:
                 _, contours, _ = cv2.findContours(np.uint8(seg_map), 1, 2)
             except ValueError:
                 contours, _ = cv2.findContours(np.uint8(seg_map), 1, 2)
-            contours = max(contours, key=cv2.contourArea)
-            final_edges = self.resolve_contour(contours, maskEdges)
+            try:
+                contours = max(contours, key=cv2.contourArea)
+                final_edges = self.resolve_contour(contours, maskEdges)
+                if not len(final_edges):
+                    return 0.25
+            except:
+                return 0.25
         
         result = pupil_ellipse
         #temp = np.zeros(seg_map.shape)
@@ -319,17 +326,24 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         else:
             useMultiGPU = False
         
-        netDict = torch.load(WEIGHT_LOCATIONS)
-        args = make_args().__dict__
-        for key, value in netDict['args'].items():
-            args[key] = value
-        model = ellseg_model_dict[MODEL_DICT_KEY](args, norm=torch.nn.InstanceNorm2d,
-                                      act_func=torch.nn.functional.leaky_relu)
-        model.load_state_dict(netDict['state_dict'], strict=True)
+        # NETWORK 1 - EDGE NETWORK
+        BDCN_network = BDCN()
+        state_dict = torch.load(EDGEMODEL_LOCATION)
+        BDCN_network.load_state_dict(state_dict['a'])
+        BDCN_network = BDCN_network.cuda()
+        BDCN_network.eval()
+
+        # NETWORK 2 - ESF NETWORK
+        setting = get_config(SETTINGS_LOCATION)
+        model = DenseNet2D(setting)
+        print('Setting : {} {}'.format(model_file, setting_file))
+        netDict = load_from_file([WEIGHT_LOCATIONS])
+        model.load_state_dict(netDict['state_dict'])
         model.cuda()
         
         #  Initialize model
         self.isAlone = False
+        self.BDCN_network = BDCN_network
         self.model = model
         self.ellipse_true_support_min_dist = ellipse_true_support_min_dist
         
@@ -338,7 +352,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         min_pupil_size = int(sys.argv[output[0]][sys.argv[output[0]].rfind('=')+1:]) if len(output) > 0 else 1
         self.g_pool.ellseg_pupil_size_min = min_pupil_size
         
-        self.g_pool.ellseg_customellipse = True if "--custom-ellipse" in sys.argv else False
+        self.g_pool.ellseg_customellipse = True
         self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
         self.g_pool.save_masks = True if ("--save-masks=0" in sys.argv and self.g_pool.eye_id==0) or ("--save-masks=1" in sys.argv and self.g_pool.eye_id==1) or "--save-masks=both" in sys.argv else False
@@ -359,7 +373,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         self.simple_count = 0
         self.entropy_count = 0
         
-        self.detector_ritnet_2d = RITPupilDetector(model, 4)
+        self.detector_ritnet_2d = RITPupilDetector(model, BDCN_network, 4, custom_ellipse=self.g_pool.ellseg_customellipse)
         self.help_thresh = help_thresh
 
     def _stop_other_pupil_detectors(self):
@@ -424,7 +438,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
             return result
         
         # Ellseg results are obtained - begin obtaining or returning final ellipse
-        seg_map = values[0]
+        seg_map = values[1]
         origSeg_map = np.copy(seg_map)
         yellow_mask = np.zeros((origSeg_map.shape[0], origSeg_map.shape[1], 3))
         yellow_mask[:,:,2][origSeg_map == 2] = 128
@@ -436,24 +450,16 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         final_bgr = cv2.addWeighted(yellow_mask.astype(np.uint8), alpha, frame.bgr.astype(np.uint8), beta, 0.0)
         frame.bgr = final_bgr
         
-        ellseg_pupil_ellipse = values[1]
+        ellseg_pupil_ellipse = values[2]
         #iris_ellipse = values[2]
-        
-        seg_entropy = values[3]
 
         if self.g_pool.ellseg_reverse:
             seg_map = np.flip(seg_map, axis=0)
-            seg_entropy = np.flip(seg_entropy, axis=0)
             
             # Change format of ellseg ellipse to meet PL conventions
             height, width = seg_map.shape
             ellseg_pupil_ellipse[1] = (-ellseg_pupil_ellipse[1]+(2*height/2))
             ellseg_pupil_ellipse[4] = ellseg_pupil_ellipse[4]*-1
-        
-        # initialize entropy mask
-        seg_entropy_mask = np.divide(seg_entropy, np.log2(CHANNELS))
-        pupil_entropy_mask = seg_entropy_mask
-        pupil_entropy_mask[seg_map != 2] = 0
 
         # OPTION 1: If custom ellipse setting is NOT toggled on
         if not customEllipse:
@@ -474,61 +480,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
 
             ## Apply pupil labs ellipse fit to mask
             final_result = super().detect(framedup)
-            """
-            final_result_normalim = super().detect(frame)
-            
-            translational_diff = (((final_result_normalim["ellipse"]["center"][0]**2 + final_result_normalim["ellipse"]["center"][1]**2)**0.5 -
-                (final_result["ellipse"]["center"][0]**2 + final_result["ellipse"]["center"][1]**2)**0.5)**2)**0.5
-            
-            if final_result_normalim['confidence'] > 0.0 and translational_diff > 5.0:
-                
-                final_result_ellipse = final_result["ellipse"]
-                elcenter = final_result_ellipse["center"]
-                elaxes = final_result_ellipse["axes"] # axis diameters
-                
-                normal_final_result_ellipse = final_result_normalim["ellipse"]
-                normal_elcenter = normal_final_result_ellipse["center"]
-                normal_elaxes = normal_final_result_ellipse["axes"] # axis diameters
-                
-                seg_map_debug = np.stack((np.copy(img),)*3, axis=-1)
-                cv2.ellipse(seg_map_debug,
-                    (round(elcenter[0]), round(elcenter[1])),
-                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
-                    final_result_ellipse["angle"], 0, 360, (0, 0, 255), 1)
-                    
-                normal_map_debug = np.stack((np.copy(img),)*3, axis=-1)
-                cv2.ellipse(normal_map_debug,
-                    (round(normal_elcenter[0]), round(normal_elcenter[1])),
-                    (round(normal_elaxes[0]/2), round(normal_elaxes[1]/2)), # convert diameters to radii
-                    normal_final_result_ellipse["angle"], 0, 360, (255, 128, 0), 1)
-                
-                both_map_debug = np.stack((np.copy(img),)*3, axis=-1)
-                cv2.ellipse(both_map_debug,
-                    (round(elcenter[0]), round(elcenter[1])),
-                    (round(elaxes[0]/2), round(elaxes[1]/2)), # convert diameters to radii
-                    final_result_ellipse["angle"], 0, 360, (0, 0, 255), 1)
-                cv2.ellipse(both_map_debug,
-                    (round(normal_elcenter[0]), round(normal_elcenter[1])),
-                    (round(normal_elaxes[0]/2), round(normal_elaxes[1]/2)), # convert diameters to radii
-                    normal_final_result_ellipse["angle"], 0, 360, (255, 128, 0), 1)
-                
-                seg_map_debug = cv2.putText(seg_map_debug, "Through EllSeg", (10, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (255, 255, 255), 3, cv2.LINE_AA)
-                seg_map_debug = cv2.putText(seg_map_debug, "Through EllSeg", (10, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (0, 0, 255), 2, cv2.LINE_AA)
-                
-                normal_map_debug = cv2.putText(normal_map_debug, "Normal Input", (15, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (255, 255, 255), 3, cv2.LINE_AA)
-                normal_map_debug = cv2.putText(normal_map_debug, "Normal Input", (15, 35), cv2.FONT_HERSHEY_COMPLEX_SMALL        , 2, (255, 128, 0), 2, cv2.LINE_AA)
-                
-                out = np.concatenate([normal_map_debug, seg_map_debug], axis=1)
-                cv2.imshow('comparison', out)
-                cv2.waitKey(0)
-                imOutDir = os.path.join(".")
-                
-                fname = 'out.jpg'
-                cv2.imwrite('{}/{}'.format(imOutDir, fname), out)
-                exit()
-            """
             if self.g_pool.ellseg_debug:
-
                 final_result_ellipse = final_result["ellipse"]
                 elcenter = final_result_ellipse["center"]
                 elaxes = final_result_ellipse["axes"] # axis diameters
@@ -752,7 +704,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
                 
 
 
-            confidence = self.calcConfidence(ellseg_pupil_ellipse, seg_map, debug_confidence_timestamp=None)
+            confidence = self.calcConfidence(ellseg_pupil_ellipse, seg_map)
 
             if self.g_pool.save_masks == True:
                 fname = "eye-{}_{:0.3f}.png".format(eye_id, confidence)
@@ -839,7 +791,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         self.menu.label = self.pretty_class_name
         self.menu_icon.label_font = "pupil_icons"
         info = ui.Info_Text(
-            "(PURPLE) Model using EllSeg, the \"ellseg_v2\" model."
+            "(PURPLE) Model using ESF-Net, the \"baseline_edge_16\" model."
         )
         self.menu.append(info)
         self.menu.append(
@@ -889,44 +841,3 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
                 label="Use custom confidence metric"
             )
         )
-
-
-        """
-        self.menu.append(
-            ui.Slider(
-                "2d.intensity_range",
-                self.proxy,
-                label="Pupil intensity range",
-                min=0,
-                max=60,
-                step=1,
-            )
-        )
-        self.menu.append(
-            ui.Slider(
-                "2d.pupil_size_min",
-                self.proxy,
-                label="Pupil min",
-                min=1,
-                max=250,
-                step=1,
-            )
-        )
-        self.menu.append(
-            ui.Slider(
-                "2d.pupil_size_max",
-                self.proxy,
-                label="Pupil max",
-                min=50,
-                max=400,
-                step=1,
-            )
-        )
-        self.menu.append(
-            ui.Switch(
-                "ritnet_2d",
-                self.g_pool,
-                label="Enable RITnet"
-            )
-        )
-        """

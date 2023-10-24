@@ -110,7 +110,7 @@ class RITPupilDetector(DetectorBase):
             return None
 
 
-class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
+class Detector2DRITnetEllsegV2AllvoneEmbeddedPlugin(Detector2DPlugin):
     uniqueness = "by_class"
     icon_chr = "RE"
 
@@ -197,14 +197,19 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
 
     def calcConfidence(self, pupil_ellipse, seg_map, debug_confidence_timestamp=None, final_edges=None):
         
-        if final_edges is None:
+        if final_edges is None or not len(final_edges):
             maskEdges = np.uint8(cv2.Canny(np.uint8(seg_map), 1, 2))
             try:
                 _, contours, _ = cv2.findContours(np.uint8(seg_map), 1, 2)
             except ValueError:
                 contours, _ = cv2.findContours(np.uint8(seg_map), 1, 2)
-            contours = max(contours, key=cv2.contourArea)
-            final_edges = self.resolve_contour(contours, maskEdges)
+            try:
+                contours = max(contours, key=cv2.contourArea)
+                final_edges = self.resolve_contour(contours, maskEdges)
+                if not len(final_edges):
+                    return 0.25
+            except:
+                return 0.25
         
         result = pupil_ellipse
         #temp = np.zeros(seg_map.shape)
@@ -338,7 +343,7 @@ class Detector2DRITnetEllsegV2AllvonePlugin(Detector2DPlugin):
         min_pupil_size = int(sys.argv[output[0]][sys.argv[output[0]].rfind('=')+1:]) if len(output) > 0 else 1
         self.g_pool.ellseg_pupil_size_min = min_pupil_size
         
-        self.g_pool.ellseg_customellipse = True if "--custom-ellipse" in sys.argv else False
+        self.g_pool.ellseg_customellipse = True
         self.g_pool.ellseg_reverse = True if self.g_pool.eye_id==1 else False
         self.g_pool.ellseg_debug = False
         self.g_pool.save_masks = True if ("--save-masks=0" in sys.argv and self.g_pool.eye_id==0) or ("--save-masks=1" in sys.argv and self.g_pool.eye_id==1) or "--save-masks=both" in sys.argv else False
